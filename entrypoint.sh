@@ -125,14 +125,19 @@ setup_custom_nodes() {
         fi
     fi
     
-    # Ensure Data Manager exists
+    # Ensure Data Manager exists (only for admin with write access)
     if [ ! -d "/app/custom_nodes/ComfyUI-DataManager" ]; then
-        echo "🗂️ Data Manager not found in shared volume, copying from container..."
-        if [ -d "/tmp/ComfyUI-DataManager-backup" ]; then
+        echo "🗂️ Data Manager not found in shared volume..."
+        if [ "$CONTAINER_ROLE" = "admin" ] && [ -d "/tmp/ComfyUI-DataManager-backup" ]; then
+            echo "Admin: Copying Data Manager from container backup..."
             cp -r "/tmp/ComfyUI-DataManager-backup" "/app/custom_nodes/ComfyUI-DataManager"
+        elif [ "$CONTAINER_ROLE" = "user" ]; then
+            echo "User: Data Manager will be available once admin initializes it"
         else
             echo "Warning: Data Manager not available"
         fi
+    else
+        echo "✓ Data Manager found in shared volume"
     fi
     
     echo "✓ Custom nodes directory directly mounted to shared volume"
