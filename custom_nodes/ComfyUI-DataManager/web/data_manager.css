@@ -1,0 +1,173 @@
+/* Additional styling for Data Manager integration */
+
+/* ComfyUI Menu Button Styling */
+.comfy-menu-button {
+    background: #2d2d2d !important;
+    border: 1px solid #404040 !important;
+    color: #ffffff !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    margin: 2px !important;
+    cursor: pointer !important;
+    font-size: 12px !important;
+    transition: all 0.2s ease !important;
+}
+
+.comfy-menu-button:hover {
+    background: #3d3d3d !important;
+    border-color: #0066cc !important;
+}
+
+/* Data Manager Widget Enhancements */
+#data-manager-widget {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    resize: both !important;
+    min-width: 250px !important;
+    min-height: 200px !important;
+    max-width: 90vw !important;
+    max-height: 90vh !important;
+}
+
+#data-manager-widget .widget-header {
+    user-select: none !important;
+}
+
+#data-manager-widget .widget-header button:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 4px !important;
+}
+
+/* Dialog Enhancements */
+#data-manager-dialog {
+    backdrop-filter: blur(5px) !important;
+}
+
+#data-manager-dialog .comfy-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    #data-manager-widget {
+        width: calc(100vw - 40px) !important;
+        height: 50vh !important;
+        top: 10px !important;
+        right: 10px !important;
+        left: 10px !important;
+    }
+    
+    #data-manager-dialog {
+        width: 95vw !important;
+        height: 90vh !important;
+    }
+}
+
+/* Drag and Drop Visual Feedback */
+.drop-zone-active {
+    border-color: #0066cc !important;
+    background: rgba(0, 102, 204, 0.05) !important;
+    transform: scale(1.02) !important;
+}
+
+/* File Icons Enhancement */
+.file-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Smooth Animations */
+.file-item,
+.directory-section,
+.section-header {
+    transition: all 0.2s ease !important;
+}
+
+.directory-section:hover {
+    border-color: #555 !important;
+}
+
+/* Custom Scrollbar */
+.directory-tree::-webkit-scrollbar {
+    width: 8px;
+}
+
+.directory-tree::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+.directory-tree::-webkit-scrollbar-thumb {
+    background: #404040;
+    border-radius: 4px;
+}
+
+.directory-tree::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Loading States */
+.loading {
+    opacity: 0.6 !important;
+    pointer-events: none !important;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #666;
+    border-top-color: #0066cc;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Success/Error Messages */
+.status-success {
+    color: #4caf50 !important;
+}
+
+.status-error {
+    color: #f44336 !important;
+}
+
+.status-warning {
+    color: #ff9800 !important;
+}
+
+/* Tooltip Styles */
+.tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1000;
+}
+
+.tooltip:hover::after {
+    opacity: 1;
+} 

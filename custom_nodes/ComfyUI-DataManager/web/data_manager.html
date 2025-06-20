@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Data Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #2d2d2d;
+            padding: 15px 20px;
+            border-bottom: 1px solid #404040;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .refresh-btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #0052a3;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .directory-tree {
+            width: 100%;
+            padding: 20px;
+            overflow-y: auto;
+            background: #1e1e1e;
+        }
+
+        .directory-section {
+            margin-bottom: 25px;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: #2d2d2d;
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header:hover {
+            background: #353535;
+        }
+
+        .section-content {
+            padding: 0;
+        }
+
+        .file-tree {
+            list-style: none;
+        }
+
+        .file-item {
+            padding: 8px 16px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .file-item:hover {
+            background: #2a2a2a;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .file-name {
+            flex: 1;
+            font-size: 13px;
+        }
+
+        .file-size {
+            font-size: 11px;
+            color: #888;
+            margin-left: 10px;
+        }
+
+        .file-actions {
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .file-item:hover .file-actions {
+            opacity: 1;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            padding: 4px;
+            margin-left: 4px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .action-btn:hover {
+            background: #404040;
+            color: #fff;
+        }
+
+        .delete-btn:hover {
+            background: #cc0000;
+        }
+
+        .drop-zone {
+            border: 2px dashed #666;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            margin: 20px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .drop-zone.dragover {
+            border-color: #0066cc;
+            background: rgba(0, 102, 204, 0.1);
+        }
+
+        .drop-zone-text {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone-subtext {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .upload-progress {
+            margin: 20px;
+            padding: 15px;
+            background: #2d2d2d;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #404040;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #0066cc;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .nested {
+            margin-left: 20px;
+        }
+
+        .folder-icon::before {
+            content: "📁";
+        }
+
+        .file-icon::before {
+            content: "📄";
+        }
+
+        .toggle-icon {
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .collapsed .section-content {
+            display: none;
+        }
+
+        .status-bar {
+            background: #2d2d2d;
+            padding: 8px 20px;
+            border-top: 1px solid #404040;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗂️ ComfyUI Data Manager</h1>
+        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh</button>
+    </div>
+
+    <div class="main-content">
+        <div class="directory-tree" id="directoryTree">
+            <div class="drop-zone" onclick="triggerFileUpload()">
+                <div class="drop-zone-text">Drop files here to upload</div>
+                <div class="drop-zone-subtext">Or click to select files</div>
+            </div>
+            
+            <div class="upload-progress" id="uploadProgress">
+                <div>Uploading...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <div id="dataStructure">
+                Loading directory structure...
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+        Ready
+    </div>
+
+    <input type="file" id="fileInput" multiple style="display: none;">
+
+    <script>
+        let currentData = {};
+        let selectedUploadTarget = 'models';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setupDragAndDrop();
+            refreshData();
+        });
+
+        function setupDragAndDrop() {
+            const dropZone = document.querySelector('.drop-zone');
+            const fileInput = document.getElementById('fileInput');
+
+            // Drag and drop handlers
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            // File input handler
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+
+        function triggerFileUpload() {
+            document.getElementById('fileInput').click();
+        }
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+
+            const progressEl = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            
+            progressEl.style.display = 'block';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const progress = ((i + 1) / files.length) * 100;
+                
+                progressFill.style.width = progress + '%';
+                updateStatus(`Uploading ${file.name}...`);
+
+                try {
+                    await uploadFile(file, selectedUploadTarget);
+                    updateStatus(`✅ Uploaded ${file.name}`);
+                } catch (error) {
+                    updateStatus(`❌ Failed to upload ${file.name}: ${error.message}`);
+                }
+            }
+
+            progressEl.style.display = 'none';
+            await refreshData();
+        }
+
+        async function uploadFile(file, targetDir) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('target_dir', targetDir);
+
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Upload failed');
+            }
+
+            return await response.json();
+        }
+
+        async function refreshData() {
+            updateStatus('Loading directory structure...');
+            
+            try {
+                const response = await fetch('/api/data-structure');
+                currentData = await response.json();
+                renderDirectoryTree();
+                updateStatus('Ready');
+            } catch (error) {
+                updateStatus('❌ Failed to load data: ' + error.message);
+            }
+        }
+
+        function renderDirectoryTree() {
+            const container = document.getElementById('dataStructure');
+            container.innerHTML = '';
+
+            const sections = [
+                { key: 'models', title: '🎯 Models', icon: '🎯' },
+                { key: 'custom_nodes', title: '🔧 Custom Nodes', icon: '🔧' },
+                { key: 'input', title: '📥 Input', icon: '📥' },
+                { key: 'output', title: '📤 Output', icon: '📤' }
+            ];
+
+            sections.forEach(section => {
+                const sectionEl = createDirectorySection(section, currentData[section.key] || {});
+                container.appendChild(sectionEl);
+            });
+        }
+
+        function createDirectorySection(section, data) {
+            const sectionEl = document.createElement('div');
+            sectionEl.className = 'directory-section';
+
+            const headerEl = document.createElement('div');
+            headerEl.className = 'section-header';
+            headerEl.innerHTML = `
+                <span>${section.title}</span>
+                <span class="toggle-icon">▼</span>
+            `;
+            
+            headerEl.addEventListener('click', () => {
+                sectionEl.classList.toggle('collapsed');
+            });
+
+            const contentEl = document.createElement('div');
+            contentEl.className = 'section-content';
+
+            const treeEl = createFileTree(data, section.key);
+            contentEl.appendChild(treeEl);
+
+            sectionEl.appendChild(headerEl);
+            sectionEl.appendChild(contentEl);
+
+            return sectionEl;
+        }
+
+        function createFileTree(data, basePath) {
+            const treeEl = document.createElement('ul');
+            treeEl.className = 'file-tree';
+
+            Object.entries(data).forEach(([name, info]) => {
+                const itemEl = document.createElement('li');
+                itemEl.className = 'file-item';
+
+                const iconEl = document.createElement('span');
+                iconEl.className = info.type === 'directory' ? 'folder-icon file-icon' : 'file-icon';
+
+                const nameEl = document.createElement('span');
+                nameEl.className = 'file-name';
+                nameEl.textContent = name;
+
+                const sizeEl = document.createElement('span');
+                sizeEl.className = 'file-size';
+                sizeEl.textContent = info.type === 'file' ? formatFileSize(info.size) : '';
+
+                const actionsEl = document.createElement('div');
+                actionsEl.className = 'file-actions';
+                actionsEl.innerHTML = `
+                    <button class="action-btn delete-btn" onclick="deleteItem('${info.path}')">🗑️</button>
+                `;
+
+                itemEl.appendChild(iconEl);
+                itemEl.appendChild(nameEl);
+                itemEl.appendChild(sizeEl);
+                itemEl.appendChild(actionsEl);
+
+                // Add click handler for upload target selection
+                if (info.type === 'directory') {
+                    itemEl.addEventListener('click', (e) => {
+                        if (!e.target.classList.contains('action-btn')) {
+                            selectedUploadTarget = basePath;
+                            updateStatus(`Upload target: ${basePath}/${name}`);
+                        }
+                    });
+                }
+
+                treeEl.appendChild(itemEl);
+
+                // Add nested items for directories
+                if (info.type === 'directory' && info.children) {
+                    const nestedEl = createFileTree(info.children, basePath);
+                    nestedEl.className += ' nested';
+                    itemEl.appendChild(nestedEl);
+                }
+            });
+
+            return treeEl;
+        }
+
+        async function deleteItem(path) {
+            if (!confirm(`Are you sure you want to delete ${path}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/delete', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ path })
+                });
+
+                if (response.ok) {
+                    updateStatus(`✅ Deleted ${path}`);
+                    await refreshData();
+                } else {
+                    const error = await response.json();
+                    updateStatus(`❌ Failed to delete: ${error.error}`);
+                }
+            } catch (error) {
+                updateStatus(`❌ Delete failed: ${error.message}`);
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function updateStatus(message) {
+            document.getElementById('statusBar').textContent = message;
+        }
+    </script>
+</body>
+</html> 
