@@ -114,7 +114,7 @@ setup_model_paths() {
 setup_custom_nodes() {
     echo "=== Setting up custom nodes ==="
     
-    # With direct mount to /app/custom_nodes, just ensure ComfyUI Manager exists
+    # With direct mount to /app/custom_nodes, just ensure ComfyUI Manager and Data Manager exist
     if [ ! -d "/app/custom_nodes/ComfyUI-Manager" ]; then
         echo "ComfyUI Manager not found in shared volume, copying from container..."
         # If we have a local copy, copy it to the shared volume
@@ -122,6 +122,16 @@ setup_custom_nodes() {
             cp -r "/tmp/ComfyUI-Manager-backup" "/app/custom_nodes/ComfyUI-Manager"
         else
             echo "Warning: ComfyUI Manager not available"
+        fi
+    fi
+    
+    # Ensure Data Manager exists
+    if [ ! -d "/app/custom_nodes/ComfyUI-DataManager" ]; then
+        echo "🗂️ Data Manager not found in shared volume, copying from container..."
+        if [ -d "/tmp/ComfyUI-DataManager-backup" ]; then
+            cp -r "/tmp/ComfyUI-DataManager-backup" "/app/custom_nodes/ComfyUI-DataManager"
+        else
+            echo "Warning: Data Manager not available"
         fi
     fi
     
@@ -215,6 +225,7 @@ case "${CONTAINER_ROLE:-user}" in
         
         echo "✓ Admin container ready - Full access to install models and custom nodes"
         echo "✓ ComfyUI Manager: http://localhost:8190/manager"
+        echo "✓ Data Manager: http://localhost:8190/data-manager"
         ;;
         
     "user")
@@ -234,6 +245,7 @@ case "${CONTAINER_ROLE:-user}" in
         
         echo "✓ User container ready - Read-only access to Golden Image"
         echo "✓ ComfyUI Manager: http://localhost:8191/manager (read-only)"
+        echo "✓ Data Manager: http://localhost:8191/data-manager"
         ;;
         
     *)

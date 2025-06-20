@@ -41,8 +41,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install ComfyUI Manager (for admin interface)
 RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git ./custom_nodes/ComfyUI-Manager
 
-# Backup ComfyUI Manager before volume mount overwrites it
-RUN cp -r ./custom_nodes/ComfyUI-Manager /tmp/ComfyUI-Manager-backup
+# Copy Data Manager custom node
+COPY custom_nodes/ComfyUI-DataManager ./custom_nodes/ComfyUI-DataManager
+
+# Install Data Manager dependencies
+RUN pip install --no-cache-dir -r ./custom_nodes/ComfyUI-DataManager/requirements.txt
+
+# Backup ComfyUI Manager and Data Manager before volume mount overwrites them
+RUN cp -r ./custom_nodes/ComfyUI-Manager /tmp/ComfyUI-Manager-backup \
+    && cp -r ./custom_nodes/ComfyUI-DataManager /tmp/ComfyUI-DataManager-backup
 
 # Create directories for Golden Image pattern
 RUN mkdir -p /app/shared_python \

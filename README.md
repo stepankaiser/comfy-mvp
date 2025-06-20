@@ -68,12 +68,22 @@ docker-compose logs -f user_comfyui
 
 - **Admin ComfyUI**: http://localhost:8190
 - **Admin Manager**: http://localhost:8190/manager (full access)
+- **Admin Data Manager**: http://localhost:8190/data-manager (file management)
 - **User ComfyUI**: http://localhost:8191
 - **User Manager**: http://localhost:8191/manager (read-only)
+- **User Data Manager**: http://localhost:8191/data-manager (browse files)
 
 ## 👑 Admin Workflow
 
 ### Instalace modelů
+
+**Metoda 1: Přes Data Manager (doporučeno)**
+1. Otevřete Data Manager: http://localhost:8190/data-manager
+2. Přetáhněte modely do drop zone nebo klikněte pro výběr
+3. Vyberte cílovou složku (checkpoints, loras, vae, atd.)
+4. Modely se automaticky nahrají a seřadí
+
+**Metoda 2: Přes ComfyUI interface**
 1. Otevřete admin rozhraní (port 8190)
 2. Nahrajte modely přes ComfyUI interface
 3. Modely se automaticky uloží do shared volume
@@ -112,6 +122,27 @@ docker-compose exec admin_comfyui rclone sync /app/shared_models s3-storage:your
 3. Použijte custom nodes (všechny admin nodes funkční)
 4. Generujte obrázky normálně
 5. Obrázky se ukládají do uživatelského output adresáře
+
+## 🗂️ Data Manager
+
+### Funkce
+- **📁 Procházení adresářů**: Vizuální prohlížeč všech ComfyUI složek
+- **🖱️ Drag & Drop**: Jednoduché nahrávání souborů přetažením
+- **🗑️ Správa souborů**: Mazání souborů a složek s potvrzením
+- **🔄 Real-time aktualizace**: Automatické obnovení po operacích
+- **📊 Progress tracking**: Vizuální indikátory průběhu nahrávání
+
+### Přístup k Data Manageru
+- **Tlačítko v menu**: Klikněte "🗂️ Data Manager" v ComfyUI menu
+- **Klávesová zkratka**: Stiskněte `Ctrl+D` pro toggle widget
+- **Přímý URL**: Navštivte `/data-manager` endpoint
+- **Plovoucí widget**: Přetahovatelný panel v pravém horním rohu
+
+### Podporované adresáře
+- **🎯 Models**: Všechny typy modelů (checkpoints, LoRA, VAE, atd.)
+- **🔧 Custom Nodes**: Rozšíření a custom funkce
+- **📥 Input**: Vstupní soubory pro workflows
+- **📤 Output**: Vygenerované obrázky a výsledky
 
 ## 🔧 Pokročilé funkce
 
