@@ -1,0 +1,80 @@
+# Docker Compose version is no longer required
+
+services:
+  # ADMIN CONTAINER - Full write access for creating Golden Image
+  admin_comfyui:
+    build: .
+    container_name: admin_comfyui
+    ports:
+      - "8190:8190"
+    env_file: .env
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - CONTAINER_ROLE=admin
+      - PYTHONPATH=/app/shared_python:/app/custom_nodes
+      - LD_LIBRARY_PATH=/app/shared_libs
+    volumes:
+      # Shared Golden Image volumes - DIRECT MOUNT TO STANDARD PATHS
+      - shared_models:/app/models                 # Direct mount to standard models directory
+      - shared_custom_nodes:/app/custom_nodes     # Direct mount to standard custom_nodes directory  
+      - shared_python:/app/shared_python          # Python packages from custom nodes
+      - shared_libs:/app/shared_libs              # System libraries
+      # Admin-specific volumes
+      - admin_cache:/app/cache                    # Admin's local cache
+      - admin_config:/app/user                    # Admin's personal config
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    security_opt:
+      - apparmor:unconfined
+
+  # USER CONTAINER - Read-only access to Golden Image
+  user_comfyui:
+    build: .
+    container_name: user_comfyui
+    ports:
+      - "8191:8190"
+    env_file: .env
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - CONTAINER_ROLE=user
+      - PYTHONPATH=/app/shared_python:/app/custom_nodes
+      - LD_LIBRARY_PATH=/app/shared_libs
+      - COMFYUI_DISABLE_MANAGER_INSTALL=1  # Disable install buttons
+    volumes:
+      # Read-only access to Golden Image - DIRECT MOUNT TO STANDARD PATHS
+      - shared_models:/app/models:ro               # Direct mount to standard models directory (read-only)
+      - shared_custom_nodes:/app/custom_nodes:ro   # Direct mount to standard custom_nodes directory (read-only)
+      - shared_python:/app/shared_python:ro
+      - shared_libs:/app/shared_libs:ro
+      # User-specific volumes (writable)
+      - user_cache:/app/cache
+      - user_config:/app/user
+      - user_output:/app/output              # User's own outputs
+    depends_on:
+      - admin_comfyui
+
+volumes:
+  # Golden Image volumes (shared between admin and users)
+  shared_models:
+  shared_custom_nodes:
+  shared_python:
+  shared_libs:
+  
+  # Admin-specific volumes
+  admin_cache:
+  admin_config:
+  
+  # User-specific volumes  
+  user_cache:
+  user_config:
+  user_output: 
