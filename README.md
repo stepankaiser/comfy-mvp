@@ -125,24 +125,38 @@ docker-compose exec admin_comfyui rclone sync /app/shared_models s3-storage:your
 
 ## 🗂️ Data Manager
 
-### Funkce
-- **📁 Procházení adresářů**: Vizuální prohlížeč všech ComfyUI složek
-- **🖱️ Drag & Drop**: Jednoduché nahrávání souborů přetažením
-- **🗑️ Správa souborů**: Mazání souborů a složek s potvrzením
-- **🔄 Real-time aktualizace**: Automatické obnovení po operacích
-- **📊 Progress tracking**: Vizuální indikátory průběhu nahrávání
+### 🎯 Integrovaný zážitek (doporučeno)
 
-### Přístup k Data Manageru
-- **Tlačítko v menu**: Klikněte "🗂️ Data Manager" v ComfyUI menu
-- **Klávesová zkratka**: Stiskněte `Ctrl+D` pro toggle widget
-- **Přímý URL**: Navštivte `/data-manager` endpoint
-- **Plovoucí widget**: Přetahovatelný panel v pravém horním rohu
+**Bookmarklet integrace** - Přidejte Data Manager přímo do ComfyUI rozhraní:
+
+1. Otevřete ComfyUI: http://localhost:8190
+2. Přidejte tento bookmarklet do záložek prohlížeče:
+```javascript
+javascript:(function(){if(!document.getElementById('data-manager-frame')){var f=document.createElement('iframe');f.id='data-manager-frame';f.src='/data-manager?embedded=true';f.style.cssText='position:fixed;top:50px;right:10px;width:450px;height:calc(100vh-70px);border:2px solid #404040;border-radius:12px;z-index:9999;background:rgba(20,20,20,0.98);backdrop-filter:blur(15px);box-shadow:0 8px 32px rgba(0,0,0,0.8);resize:both;overflow:hidden;min-width:300px;min-height:400px';f.allow='fullscreen';document.body.appendChild(f);var b=document.createElement('button');b.innerHTML='✕';b.title='Zavřít Data Manager';b.style.cssText='position:fixed;top:55px;right:20px;z-index:10000;background:#ff4444;color:white;border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px;font-weight:bold;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);transition:all 0.2s ease';b.onmouseover=function(){this.style.background='#ff6666';this.style.transform='scale(1.1)'};b.onmouseout=function(){this.style.background='#ff4444';this.style.transform='scale(1)'};b.onclick=function(){f.remove();b.remove();h.remove()};document.body.appendChild(b);var h=document.createElement('div');h.innerHTML='📂 Data Manager';h.style.cssText='position:fixed;top:50px;right:10px;width:450px;height:30px;background:linear-gradient(135deg,#333,#555);color:white;border-radius:12px 12px 0 0;cursor:move;display:flex;align-items:center;padding:0 15px;font-size:12px;font-weight:bold;z-index:10001;user-select:none;border:2px solid #404040;border-bottom:none';var isDragging=false,startX,startY,startLeft,startTop;h.onmousedown=function(e){isDragging=true;startX=e.clientX;startY=e.clientY;startLeft=parseInt(f.style.right)||10;startTop=parseInt(f.style.top)||50;document.onmousemove=function(e){if(!isDragging)return;var dx=startX-e.clientX;var dy=e.clientY-startY;f.style.right=(startLeft+dx)+'px';f.style.top=(startTop+dy)+'px';h.style.right=(startLeft+dx)+'px';h.style.top=(startTop+dy)+'px';b.style.right=(startLeft+dx+10)+'px';b.style.top=(startTop+dy+5)+'px'};document.onmouseup=function(){isDragging=false;document.onmousemove=null;document.onmouseup=null}};document.body.appendChild(h);console.log('✅ Data Manager loaded!')}else{document.getElementById('data-manager-frame').remove();document.querySelector('button[title=\"Zavřít Data Manager\"]')?.remove();document.querySelector('div[innerHTML*=\"Data Manager\"]')?.remove();console.log('❌ Data Manager closed')}})();
+```
+3. Klikněte na bookmarklet na ComfyUI stránce pro toggle Data Manager
+
+### 📱 Samostatný přístup
+- **Admin**: http://localhost:8190/data-manager (plný přístup)
+- **User**: http://localhost:8191/data-manager (pouze čtení)
+
+### ✨ Funkce
+- **📁 Procházení adresářů**: Vizuální prohlížeč všech ComfyUI složek
+- **🖱️ Drag & Drop**: Jednoduché nahrávání souborů přetažením (pouze admin)
+- **📥 Stahování souborů**: Download jednotlivých souborů nebo celých složek jako ZIP
+- **🗑️ Správa souborů**: Mazání souborů a složek s potvrzením
+- **📂 Vytváření složek**: Organizace souborů do vlastních adresářů
+- **🔄 Real-time aktualizace**: Automatické obnovení po operacích
+- **🎯 Embedded mód**: Plná integrace do ComfyUI rozhraní
+- **🚀 Rychlé přepínání**: Snadné zobrazení/skrytí panelu
 
 ### Podporované adresáře
 - **🎯 Models**: Všechny typy modelů (checkpoints, LoRA, VAE, atd.)
 - **🔧 Custom Nodes**: Rozšíření a custom funkce
 - **📥 Input**: Vstupní soubory pro workflows
 - **📤 Output**: Vygenerované obrázky a výsledky
+
+📖 **Detailní návod**: [INTEGRATION.md](custom_nodes/ComfyUI-DataManager/INTEGRATION.md)
 
 ## 🔧 Pokročilé funkce
 
@@ -283,4 +297,40 @@ user2_comfyui:
 4. **Cost Effective**: Sdílené modely = úspora místa
 5. **Transparent**: ComfyUI funguje normálně pro všechny
 6. **Scalable**: Snadné přidávání dalších uživatelů
-7. **Persistent**: S3 jako backup pro celé prostředí 
+7. **Persistent**: S3 jako backup pro celé prostředí
+
+## 🧪 Testování
+
+### Základní funkčnost
+```bash
+# Test celého systému
+./test-system.sh
+
+# Test Data Manager funkcí
+./test-data-manager.sh
+
+# Test download funkcí (NOVÉ!)
+./test-download.sh
+
+# Test integrace
+./test-integration.sh
+
+# Test Chrome extension
+./test-chrome-extension.sh
+```
+
+### API testování
+```bash
+# Test Data Manager API
+curl http://localhost:8190/api/data-structure
+
+# Test download API (NOVÉ!)
+curl http://localhost:8190/api/download?path=output/example.png
+curl http://localhost:8190/api/download-dir?path=output/folder
+```
+
+### Download funkcionalita
+- **📥 Jednotlivé soubory**: Klikněte na 📥 tlačítko u souboru
+- **📦 Celé složky**: Klikněte na 📦 tlačítko u složky (stáhne jako ZIP)
+- **🔒 Bezpečnost**: Validace cest, přístup pouze k povoleným adresářům
+- **🎯 Kompatibilita**: Funguje v admin i user kontejnerech 

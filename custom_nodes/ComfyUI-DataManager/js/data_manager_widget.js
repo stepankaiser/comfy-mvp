@@ -103,18 +103,19 @@ class DataManagerWidget {
             id: "data-manager-widget",
             style: {
                 position: "fixed",
-                top: "20px",
-                right: "20px",
-                width: "300px",
-                height: "400px",
-                background: "#1a1a1a",
+                top: "60px",
+                right: "10px",
+                width: "350px",
+                height: "calc(100vh - 80px)",
+                background: "#1e1e1e",
                 border: "1px solid #404040",
                 borderRadius: "8px",
                 zIndex: "1000",
                 display: "none",
                 flexDirection: "column",
                 overflow: "hidden",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.5)"
+                boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+                backdropFilter: "blur(10px)"
             }
         }, [
             $el("div.widget-header", {
@@ -135,6 +136,7 @@ class DataManagerWidget {
                 $el("div", [
                     $el("button", {
                         textContent: "⛶",
+                        title: "Open in full screen",
                         style: {
                             background: "none",
                             border: "none",
@@ -146,7 +148,25 @@ class DataManagerWidget {
                         onclick: () => this.dialog.show()
                     }),
                     $el("button", {
+                        textContent: "📌",
+                        title: "Toggle auto-show on page load",
+                        style: {
+                            background: "none",
+                            border: "none",
+                            color: localStorage.getItem('dataManagerAutoShow') !== 'false' ? "#4CAF50" : "#888",
+                            cursor: "pointer",
+                            marginRight: "8px",
+                            fontSize: "14px"
+                        },
+                        onclick: (e) => {
+                            const autoShow = localStorage.getItem('dataManagerAutoShow') !== 'false';
+                            localStorage.setItem('dataManagerAutoShow', !autoShow);
+                            e.target.style.color = !autoShow ? "#4CAF50" : "#888";
+                        }
+                    }),
+                    $el("button", {
                         textContent: "−",
+                        title: "Minimize",
                         style: {
                             background: "none",
                             border: "none",
@@ -159,6 +179,7 @@ class DataManagerWidget {
                     }),
                     $el("button", {
                         textContent: "×",
+                        title: "Close",
                         style: {
                             background: "none",
                             border: "none",
@@ -269,19 +290,40 @@ app.registerExtension({
         if (menu) {
             const dataManagerBtn = $el("button.comfy-menu-button", {
                 textContent: "🗂️ Data Manager",
-                onclick: () => window.dataManagerWidget.toggle()
+                onclick: () => window.dataManagerWidget.toggle(),
+                style: {
+                    background: "#2d2d2d",
+                    border: "1px solid #404040",
+                    color: "#ffffff",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    margin: "2px",
+                    cursor: "pointer",
+                    fontSize: "12px"
+                }
             });
             
             menu.appendChild(dataManagerBtn);
         }
         
-        // Add keyboard shortcut (Ctrl+D)
+        // Add keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'd') {
                 e.preventDefault();
                 window.dataManagerWidget.toggle();
             }
+            if (e.key === 'F12' && e.shiftKey) {
+                e.preventDefault();
+                window.dataManagerWidget.show();
+            }
         });
+        
+        // Auto-show Data Manager on page load (optional)
+        setTimeout(() => {
+            if (localStorage.getItem('dataManagerAutoShow') !== 'false') {
+                window.dataManagerWidget.show();
+            }
+        }, 2000);
         
         console.log("✅ Data Manager extension loaded");
     }

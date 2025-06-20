@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ComfyUI Data Manager</title>
+    <script>
+        // Check if running in embedded mode
+        const urlParams = new URLSearchParams(window.location.search);
+        const isEmbedded = urlParams.get('embedded') === 'true';
+        const viewMode = urlParams.get('view') || 'browse';
+        
+        if (isEmbedded) {
+            document.documentElement.classList.add('embedded-mode');
+        }
+    </script>
     <style>
         * {
             margin: 0;
@@ -159,6 +169,17 @@
             background: #cc0000;
         }
 
+        .download-btn {
+            background: #2196F3;
+            color: white;
+            margin-right: 4px;
+        }
+
+        .download-btn:hover {
+            background: #42A5F5;
+            transform: translateY(-1px);
+        }
+
         .drop-zone {
             border: 2px dashed #666;
             border-radius: 8px;
@@ -240,6 +261,81 @@
             border-top: 1px solid #404040;
             font-size: 12px;
             color: #888;
+        }
+
+        /* Embedded mode styles */
+        .embedded-mode body {
+            margin: 0;
+            padding: 0;
+            background: transparent !important;
+            height: 100vh;
+            font-size: 12px;
+        }
+        
+        .embedded-mode .header {
+            display: none;
+        }
+        
+        .embedded-mode .main-content {
+            height: 100vh;
+            padding: 5px;
+        }
+        
+        .embedded-mode .directory-tree {
+            padding: 5px;
+            background: transparent;
+            font-size: 11px;
+        }
+        
+        .embedded-mode .tree-item {
+            padding: 3px 5px;
+            font-size: 11px;
+            line-height: 1.2;
+        }
+        
+        .embedded-mode .tree-item-name {
+            font-size: 11px;
+        }
+        
+        .embedded-mode .upload-zone {
+            min-height: 60px;
+            font-size: 11px;
+            padding: 10px;
+        }
+        
+        .embedded-mode .status-bar {
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+        
+        .embedded-mode .drop-zone {
+            margin: 8px 0;
+            padding: 20px 15px;
+            font-size: 14px;
+        }
+        
+        .embedded-mode .directory-section {
+            margin-bottom: 12px;
+        }
+        
+        .embedded-mode .section-header {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+        
+        .embedded-mode .file-item {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .embedded-mode .status-bar {
+            padding: 6px 12px;
+            font-size: 11px;
+        }
+        
+        .embedded-mode .upload-progress {
+            margin: 8px;
+            padding: 10px;
         }
     </style>
 </head>
@@ -438,9 +534,18 @@
 
                 const actionsEl = document.createElement('div');
                 actionsEl.className = 'file-actions';
-                actionsEl.innerHTML = `
-                    <button class="action-btn delete-btn" onclick="deleteItem('${info.path}')">🗑️</button>
-                `;
+                
+                if (info.type === 'file') {
+                    actionsEl.innerHTML = `
+                        <button class="action-btn download-btn" onclick="downloadFile('${info.path}', '${name}')" title="Download file">📥</button>
+                        <button class="action-btn delete-btn" onclick="deleteItem('${info.path}')" title="Delete file">🗑️</button>
+                    `;
+                } else {
+                    actionsEl.innerHTML = `
+                        <button class="action-btn download-btn" onclick="downloadDirectory('${info.path}', '${name}')" title="Download as ZIP">📦</button>
+                        <button class="action-btn delete-btn" onclick="deleteItem('${info.path}')" title="Delete folder">🗑️</button>
+                    `;
+                }
 
                 itemEl.appendChild(iconEl);
                 itemEl.appendChild(nameEl);
@@ -468,6 +573,62 @@
             });
 
             return treeEl;
+        }
+
+        async function downloadFile(path, filename) {
+            try {
+                updateStatus(`📥 Downloading ${filename}...`);
+                
+                const response = await fetch(`/api/download?path=${encodeURIComponent(path)}`);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Download failed');
+                }
+                
+                // Create blob and download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                updateStatus(`✅ Downloaded ${filename}`);
+            } catch (error) {
+                updateStatus(`❌ Download failed: ${error.message}`);
+            }
+        }
+
+        async function downloadDirectory(path, dirname) {
+            try {
+                updateStatus(`📦 Creating ZIP archive for ${dirname}...`);
+                
+                const response = await fetch(`/api/download-dir?path=${encodeURIComponent(path)}`);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Download failed');
+                }
+                
+                // Create blob and download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${dirname}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                updateStatus(`✅ Downloaded ${dirname}.zip`);
+            } catch (error) {
+                updateStatus(`❌ Download failed: ${error.message}`);
+            }
         }
 
         async function deleteItem(path) {
@@ -506,6 +667,78 @@
 
         function updateStatus(message) {
             document.getElementById('statusBar').textContent = message;
+        }
+
+        // Load startup script into parent window when accessed directly
+        if (window.location.search.includes('integrate=true') && window.parent && window.parent !== window) {
+            fetch('/data-manager-startup.js')
+                .then(response => response.text())
+                .then(script => {
+                    const scriptEl = window.parent.document.createElement('script');
+                    scriptEl.textContent = script;
+                    window.parent.document.head.appendChild(scriptEl);
+                })
+                .catch(err => console.error('Failed to load startup script:', err));
+        }
+
+        // ComfyUI Integration Script
+        if (window.parent !== window) {
+            // We're in an iframe - add integration features
+            window.addEventListener('load', function() {
+                // Add floating toggle button for parent window
+                if (window.parent.document) {
+                    const toggleBtn = window.parent.document.createElement('button');
+                    toggleBtn.innerHTML = '📂 Files';
+                    toggleBtn.style.cssText = `
+                        position: fixed;
+                        top: 10px;
+                        right: 10px;
+                        z-index: 10000;
+                        background: #2d2d2d;
+                        color: white;
+                        border: 1px solid #404040;
+                        padding: 8px 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 12px;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    `;
+                    
+                    let dataManagerFrame = null;
+                    
+                    toggleBtn.onclick = function() {
+                        if (dataManagerFrame) {
+                            dataManagerFrame.remove();
+                            dataManagerFrame = null;
+                            toggleBtn.innerHTML = '📂 Files';
+                        } else {
+                            dataManagerFrame = window.parent.document.createElement('iframe');
+                            dataManagerFrame.src = '/data-manager?embedded=true';
+                            dataManagerFrame.style.cssText = `
+                                position: fixed;
+                                top: 60px;
+                                right: 10px;
+                                width: 350px;
+                                height: calc(100vh - 80px);
+                                border: 1px solid #404040;
+                                border-radius: 8px;
+                                z-index: 9999;
+                                background: rgba(30, 30, 30, 0.95);
+                                backdrop-filter: blur(10px);
+                                box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+                            `;
+                            window.parent.document.body.appendChild(dataManagerFrame);
+                            toggleBtn.innerHTML = '✕ Close';
+                        }
+                    };
+                    
+                    // Only add if not already present
+                    if (!window.parent.document.getElementById('data-manager-toggle')) {
+                        toggleBtn.id = 'data-manager-toggle';
+                        window.parent.document.body.appendChild(toggleBtn);
+                    }
+                }
+            });
         }
     </script>
 </body>

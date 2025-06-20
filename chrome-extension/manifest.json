@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "ComfyUI Data Manager",
+  "version": "2.0",
+  "description": "Vylepšený Data Manager s drag&drop, resize a moderním designem pro ComfyUI",
+  "permissions": ["activeTab"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Toggle Data Manager"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:8190/*", "http://localhost:8191/*"],
+      "js": ["content.js"]
+    }
+  ]
+} 
