@@ -22,42 +22,7 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-# Variables
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "eu-central-1"
-}
-
-variable "project_name" {
-  description = "Project name for resource naming"
-  type        = string
-  default     = "comfyui-golden-image"
-}
-
-variable "environment" {
-  description = "Environment (dev, staging, prod)"
-  type        = string
-  default     = "prod"
-}
-
-variable "container_cpu" {
-  description = "CPU units for Fargate tasks"
-  type        = number
-  default     = 4096  # 4 vCPU
-}
-
-variable "container_memory" {
-  description = "Memory for Fargate tasks in MB"
-  type        = number
-  default     = 16384  # 16 GB
-}
-
-variable "ephemeral_storage" {
-  description = "Ephemeral storage for cache in GB"
-  type        = number
-  default     = 200  # 200 GB NVMe SSD
-}
+# Variables are now defined in variables.tf
 
 # Local values
 locals {

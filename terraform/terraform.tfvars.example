@@ -1,0 +1,74 @@
+# ComfyUI AWS Deployment Configuration
+# Copy this file to terraform.tfvars and customize for your environment
+
+# Basic Configuration
+aws_region   = "eu-central-1"
+project_name = "comfyui-golden-image"
+environment  = "dev"  # dev, staging, prod
+
+# Container Resources
+container_cpu    = 4096   # 4 vCPU (2048, 4096, 8192, 16384)
+container_memory = 16384  # 16 GB (4096, 8192, 16384, 32768)
+ephemeral_storage = 200   # 200 GB cache (20-200 GB)
+
+# Auto-scaling Configuration
+user_service_min_capacity    = 1   # Minimum instances (always running)
+user_service_max_capacity    = 10  # Maximum instances (can scale up to)
+user_service_desired_count   = 2   # Initial number of instances
+admin_service_desired_count  = 1   # Admin instances (typically 1)
+
+# Auto-scaling Thresholds
+cpu_target_value     = 70.0  # Scale up when CPU > 70%
+memory_target_value  = 80.0  # Scale up when Memory > 80%
+scale_in_cooldown    = 300   # 5 minutes before scaling down
+scale_out_cooldown   = 300   # 5 minutes before scaling up
+
+# Cost Optimization
+enable_spot_instances    = false  # Use Spot instances for 50-70% savings
+spot_instance_percentage = 70     # Percentage of Spot vs On-Demand
+
+# S3 Lifecycle Management
+s3_lifecycle_ia_days      = 30  # Move to IA storage after 30 days
+s3_lifecycle_glacier_days = 90  # Move to Glacier after 90 days
+s3_delete_old_versions_days = 7 # Delete old versions after 7 days
+
+# Monitoring
+enable_detailed_monitoring = true
+log_retention_days        = 7
+
+# Security
+allowed_cidr_blocks      = ["0.0.0.0/0"]  # Restrict access if needed
+enable_deletion_protection = false        # Enable for production
+
+# Performance Tuning
+cache_size_percentage = 80   # Use 80% of ephemeral storage for cache
+hot_cache_ratio      = 0.3  # 30% hot cache, 70% cold cache
+
+# Example configurations for different environments:
+
+# DEVELOPMENT (Cost-optimized)
+# user_service_min_capacity = 0
+# user_service_max_capacity = 3
+# user_service_desired_count = 1
+# container_cpu = 2048
+# container_memory = 8192
+# ephemeral_storage = 100
+# enable_spot_instances = true
+
+# STAGING (Balanced)
+# user_service_min_capacity = 1
+# user_service_max_capacity = 5
+# user_service_desired_count = 2
+# container_cpu = 4096
+# container_memory = 16384
+# ephemeral_storage = 150
+
+# PRODUCTION (Performance-optimized)
+# user_service_min_capacity = 2
+# user_service_max_capacity = 20
+# user_service_desired_count = 3
+# container_cpu = 8192
+# container_memory = 32768
+# ephemeral_storage = 400
+# enable_deletion_protection = true
+# log_retention_days = 30 

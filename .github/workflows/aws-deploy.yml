@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:  # Manual trigger
 
 env:
   AWS_REGION: eu-central-1
@@ -62,12 +63,12 @@ jobs:
           -out=tfplan
 
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/aws-deployment') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       working-directory: ./terraform
       run: terraform apply -auto-approve tfplan
 
     - name: Get Terraform Outputs
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/aws-deployment') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       id: terraform
       working-directory: ./terraform
       run: |
@@ -80,7 +81,7 @@ jobs:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
     needs: terraform
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/aws-deployment') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     
     steps:
     - name: Checkout
@@ -135,7 +136,7 @@ jobs:
     name: Deploy to ECS
     runs-on: ubuntu-latest
     needs: [terraform, build-and-push]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/aws-deployment') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     
     steps:
     - name: Checkout
@@ -183,7 +184,7 @@ jobs:
     name: Health Check and Smoke Tests
     runs-on: ubuntu-latest
     needs: [terraform, deploy]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/aws-deployment') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     
     steps:
     - name: Checkout
@@ -276,7 +277,7 @@ jobs:
     name: Notify Deployment Status
     runs-on: ubuntu-latest
     needs: [terraform, build-and-push, deploy, health-check]
-    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/aws-deployment') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     
     steps:
     - name: Deployment Success Notification
