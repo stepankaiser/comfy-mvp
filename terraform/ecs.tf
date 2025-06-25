@@ -95,11 +95,11 @@ resource "aws_iam_role_policy" "ecs_task_logs" {
   })
 }
 
-# Admin Task Definition
+# Admin Task Definition (GPU-enabled)
 resource "aws_ecs_task_definition" "admin" {
   family                   = "${local.name_prefix}-admin"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = ["EC2"]  # Changed from FARGATE to EC2 for GPU support
   cpu                      = var.container_cpu
   memory                   = var.container_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
@@ -115,6 +115,14 @@ resource "aws_ecs_task_definition" "admin" {
       image = "${aws_ecr_repository.comfyui.repository_url}:latest"
       
       essential = true
+      
+      # GPU resource requirements
+      resourceRequirements = [
+        {
+          type  = "GPU"
+          value = "1"
+        }
+      ]
       
       portMappings = [
         {
@@ -155,6 +163,14 @@ resource "aws_ecs_task_definition" "admin" {
         {
           name  = "LD_LIBRARY_PATH"
           value = "/app/shared_libs"
+        },
+        {
+          name  = "NVIDIA_VISIBLE_DEVICES"
+          value = "all"
+        },
+        {
+          name  = "NVIDIA_DRIVER_CAPABILITIES"
+          value = "compute,utility"
         }
       ]
       
@@ -192,11 +208,11 @@ resource "aws_ecs_task_definition" "admin" {
   tags = local.tags
 }
 
-# User Task Definition
+# User Task Definition (GPU-enabled)
 resource "aws_ecs_task_definition" "user" {
   family                   = "${local.name_prefix}-user"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = ["EC2"]  # Changed from FARGATE to EC2 for GPU support
   cpu                      = var.container_cpu
   memory                   = var.container_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
@@ -212,6 +228,14 @@ resource "aws_ecs_task_definition" "user" {
       image = "${aws_ecr_repository.comfyui.repository_url}:latest"
       
       essential = true
+      
+      # GPU resource requirements
+      resourceRequirements = [
+        {
+          type  = "GPU"
+          value = "1"
+        }
+      ]
       
       portMappings = [
         {
@@ -256,6 +280,14 @@ resource "aws_ecs_task_definition" "user" {
         {
           name  = "COMFYUI_DISABLE_MANAGER_INSTALL"
           value = "1"
+        },
+        {
+          name  = "NVIDIA_VISIBLE_DEVICES"
+          value = "all"
+        },
+        {
+          name  = "NVIDIA_DRIVER_CAPABILITIES"
+          value = "compute,utility"
         }
       ]
       
@@ -293,13 +325,18 @@ resource "aws_ecs_task_definition" "user" {
   tags = local.tags
 }
 
-# Admin ECS Service
+# Admin ECS Service (GPU-enabled)
 resource "aws_ecs_service" "admin" {
   name            = "${local.name_prefix}-admin-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.admin.arn
   desired_count   = var.admin_service_desired_count
-  launch_type     = "FARGATE"
+  launch_type     = "EC2"  # Changed from FARGATE to EC2 for GPU support
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.gpu.name
+    weight           = 100
+  }
 
   network_configuration {
     subnets          = aws_subnet.private[*].id
@@ -313,18 +350,26 @@ resource "aws_ecs_service" "admin" {
     container_port   = 8190
   }
 
-  depends_on = [aws_lb_listener.main]
+  depends_on = [
+    aws_lb_listener.main,
+    aws_ecs_capacity_provider.gpu
+  ]
 
   tags = local.tags
 }
 
-# User ECS Service
+# User ECS Service (GPU-enabled)
 resource "aws_ecs_service" "user" {
   name            = "${local.name_prefix}-user-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.user.arn
   desired_count   = var.user_service_desired_count
-  launch_type     = "FARGATE"
+  launch_type     = "EC2"  # Changed from FARGATE to EC2 for GPU support
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.gpu.name
+    weight           = 100
+  }
 
   network_configuration {
     subnets          = aws_subnet.private[*].id
@@ -338,9 +383,191 @@ resource "aws_ecs_service" "user" {
     container_port   = 8190
   }
 
-  depends_on = [aws_lb_listener.main]
+  depends_on = [
+    aws_lb_listener.main,
+    aws_ecs_capacity_provider.gpu
+  ]
 
   tags = local.tags
+}
+
+# GPU-enabled Auto Scaling Group for ECS
+resource "aws_launch_template" "gpu_ecs" {
+  name_prefix   = "${local.name_prefix}-gpu-ecs-"
+  image_id      = data.aws_ami.ecs_gpu_optimized.id
+  instance_type = var.gpu_instance_type
+  key_name      = var.key_pair_name
+
+  vpc_security_group_ids = [aws_security_group.ecs_instances.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ecs_instance.name
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user-data.sh", {
+    cluster_name = aws_ecs_cluster.main.name
+  }))
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = var.gpu_instance_storage_gb
+      volume_type = "gp3"
+      encrypted   = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(local.tags, {
+      Name = "${local.name_prefix}-gpu-ecs-instance"
+    })
+  }
+
+  tags = local.tags
+}
+
+resource "aws_autoscaling_group" "gpu_ecs" {
+  name                = "${local.name_prefix}-gpu-ecs-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  min_size            = var.gpu_asg_min_size
+  max_size            = var.gpu_asg_max_size
+  desired_capacity    = var.gpu_asg_desired_capacity
+
+  launch_template {
+    id      = aws_launch_template.gpu_ecs.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
+    propagate_at_launch = false
+  }
+
+  dynamic "tag" {
+    for_each = local.tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+  }
+}
+
+# ECS Capacity Provider for GPU instances
+resource "aws_ecs_capacity_provider" "gpu" {
+  name = "${local.name_prefix}-gpu-capacity-provider"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.gpu_ecs.arn
+    managed_termination_protection = "ENABLED"
+
+    managed_scaling {
+      maximum_scaling_step_size = 2
+      minimum_scaling_step_size = 1
+      status                    = "ENABLED"
+      target_capacity           = 100
+    }
+  }
+
+  tags = local.tags
+}
+
+# Associate capacity provider with ECS cluster
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name = aws_ecs_cluster.main.name
+
+  capacity_providers = [
+    "FARGATE",
+    aws_ecs_capacity_provider.gpu.name
+  ]
+
+  default_capacity_provider_strategy {
+    base              = 1
+    weight            = 100
+    capacity_provider = "FARGATE"  # Admin containers use FARGATE
+  }
+}
+
+# IAM role for ECS instances
+resource "aws_iam_role" "ecs_instance" {
+  name = "${local.name_prefix}-ecs-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_instance" {
+  role       = aws_iam_role.ecs_instance.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_instance_profile" "ecs_instance" {
+  name = "${local.name_prefix}-ecs-instance-profile"
+  role = aws_iam_role.ecs_instance.name
+
+  tags = local.tags
+}
+
+# Security group for ECS instances
+resource "aws_security_group" "ecs_instances" {
+  name        = "${local.name_prefix}-ecs-instances"
+  description = "Security group for ECS instances"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 32768
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-ecs-instances"
+  })
+}
+
+# Data source for ECS GPU-optimized AMI
+data "aws_ami" "ecs_gpu_optimized" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-ecs-gpu-hvm-*"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
 }
 
 # Auto Scaling Target for User Service

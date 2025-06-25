@@ -112,7 +112,7 @@ jobs:
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
+    - name: Build and push ComfyUI Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -124,10 +124,30 @@ jobs:
         cache-to: type=gha,mode=max
         platforms: linux/amd64
 
-    - name: Image scan
+    - name: Build and push User Manager Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./user-manager
+        file: ./user-manager/Dockerfile
+        push: true
+        tags: |
+          ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager:${{ github.sha }}
+          ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Image scan - ComfyUI
       run: |
         aws ecr start-image-scan \
           --repository-name ${{ env.ECR_REPOSITORY }} \
+          --image-id imageTag=latest \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Image scan - User Manager
+      run: |
+        aws ecr start-image-scan \
+          --repository-name ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager \
           --image-id imageTag=latest \
           --region ${{ env.AWS_REGION }}
 
@@ -162,6 +182,14 @@ jobs:
         aws ecs update-service \
           --cluster ${{ env.ECS_CLUSTER }} \
           --service ${{ env.ECS_SERVICE_USER }} \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Update ECS User Manager Service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager-service \
           --force-new-deployment \
           --region ${{ env.AWS_REGION }}
 

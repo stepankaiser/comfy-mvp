@@ -44,6 +44,34 @@ enable_deletion_protection = false        # Enable for production
 cache_size_percentage = 80   # Use 80% of ephemeral storage for cache
 hot_cache_ratio      = 0.3  # 30% hot cache, 70% cold cache
 
+# GPU Configuration
+gpu_instance_type        = "g4dn.xlarge"  # GPU instance type (g4dn.xlarge, g5.xlarge, g5.2xlarge)
+gpu_instance_storage_gb  = 200            # EBS storage for GPU instances
+gpu_asg_min_size        = 0               # Minimum GPU instances (0 for cost optimization)
+gpu_asg_max_size        = 10              # Maximum GPU instances
+gpu_asg_desired_capacity = 1              # Initial GPU instances
+# key_pair_name          = "my-key-pair"  # Optional: EC2 Key Pair for SSH access
+
+# GPU Sharing Configuration
+enable_gpu_sharing         = true   # Enable GPU sharing between containers
+gpu_memory_reservation_mb  = 4096   # GPU memory per container (4GB allows 2-4 containers per T4)
+containers_per_gpu        = 2       # How many containers share one GPU
+
+# GPU Sharing Examples:
+# For cost optimization (2 containers per GPU):
+# enable_gpu_sharing = true
+# containers_per_gpu = 2
+# gpu_memory_reservation_mb = 4096
+
+# For performance (1 container per GPU):
+# enable_gpu_sharing = false
+# containers_per_gpu = 1
+
+# For maximum density (4 containers per GPU):
+# enable_gpu_sharing = true
+# containers_per_gpu = 4
+# gpu_memory_reservation_mb = 2048
+
 # Example configurations for different environments:
 
 # DEVELOPMENT (Cost-optimized)

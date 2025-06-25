@@ -155,4 +155,60 @@ variable "hot_cache_ratio" {
   description = "Ratio of cache to allocate for hot cache (0.0-1.0)"
   type        = number
   default     = 0.3
+}
+
+# GPU Configuration
+variable "gpu_instance_type" {
+  description = "EC2 instance type for GPU-enabled containers (g4dn.xlarge, g5.xlarge, etc.)"
+  type        = string
+  default     = "g4dn.xlarge"
+}
+
+variable "gpu_instance_storage_gb" {
+  description = "EBS storage size for GPU instances (GB)"
+  type        = number
+  default     = 200
+}
+
+variable "gpu_asg_min_size" {
+  description = "Minimum number of GPU instances in Auto Scaling Group"
+  type        = number
+  default     = 0
+}
+
+variable "gpu_asg_max_size" {
+  description = "Maximum number of GPU instances in Auto Scaling Group"
+  type        = number
+  default     = 10
+}
+
+variable "gpu_asg_desired_capacity" {
+  description = "Desired number of GPU instances in Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
+variable "key_pair_name" {
+  description = "Name of the EC2 Key Pair for GPU instances (optional)"
+  type        = string
+  default     = null
+}
+
+# GPU Sharing Configuration
+variable "enable_gpu_sharing" {
+  description = "Enable GPU sharing between multiple containers"
+  type        = bool
+  default     = true
+}
+
+variable "gpu_memory_reservation_mb" {
+  description = "GPU memory reservation per container in MB (for sharing). Set to 0 to use full GPU"
+  type        = number
+  default     = 4096  # 4GB per container (allows 2-4 containers per T4 16GB)
+}
+
+variable "containers_per_gpu" {
+  description = "Maximum number of containers per GPU instance"
+  type        = number
+  default     = 2
 } 
