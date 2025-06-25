@@ -170,7 +170,7 @@ resource "aws_ecs_service" "user_manager" {
 
 # Target Group for User Manager
 resource "aws_lb_target_group" "user_manager" {
-  name     = "${local.name_prefix}-user-manager-tg"
+  name     = "${substr(local.name_prefix, 0, 16)}-user-mgr-tg"
   port     = 5000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id

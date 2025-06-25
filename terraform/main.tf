@@ -269,17 +269,7 @@ resource "aws_ecs_cluster" "main" {
   tags = local.tags
 }
 
-resource "aws_ecs_cluster_capacity_providers" "main" {
-  cluster_name = aws_ecs_cluster.main.name
 
-  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
-
-  default_capacity_provider_strategy {
-    base              = 1
-    weight            = 100
-    capacity_provider = "FARGATE"
-  }
-}
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "ecs" {
@@ -304,7 +294,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Groups
 resource "aws_lb_target_group" "admin" {
-  name        = "${local.name_prefix}-admin-tg"
+  name        = "${substr(local.name_prefix, 0, 23)}-admin-tg"
   port        = 8190
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -326,7 +316,7 @@ resource "aws_lb_target_group" "admin" {
 }
 
 resource "aws_lb_target_group" "user" {
-  name        = "${local.name_prefix}-user-tg"
+  name        = "${substr(local.name_prefix, 0, 24)}-user-tg"
   port        = 8190
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
