@@ -189,6 +189,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "models" {
     id     = "model_lifecycle"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     # Transition to IA after 30 days
     transition {
       days          = 30

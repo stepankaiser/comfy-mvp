@@ -135,10 +135,8 @@ resource "aws_ecs_task_definition" "user_shared_gpu" {
 
   # Volume for NVIDIA MPS (Multi-Process Service) sharing
   volume {
-    name = "nvidia-mps"
-    host {
-      sourcePath = "/tmp/nvidia-mps"
-    }
+    name      = "nvidia-mps"
+    host_path = "/tmp/nvidia-mps"
   }
 
   tags = local.tags
