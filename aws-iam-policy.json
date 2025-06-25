@@ -31,6 +31,7 @@
         "ec2:RevokeSecurityGroupEgress",
         "ec2:CreateTags",
         "ec2:DeleteTags",
+        "ec2:ModifySubnetAttribute",
         "ec2:Describe*"
       ],
       "Resource": "*"
@@ -143,6 +144,7 @@
         "ecr:UploadLayerPart",
         "ecr:CompleteLayerUpload",
         "ecr:StartImageScan",
+        "ecr:GetLifecyclePolicy",
         "ecr:Describe*"
       ],
       "Resource": "*"
@@ -168,6 +170,7 @@
         "iam:ListAttachedRolePolicies",
         "iam:ListRolePolicies",
         "iam:ListInstanceProfilesForRole",
+        "iam:GetInstanceProfile",
         "iam:PassRole"
       ],
       "Resource": [
@@ -187,6 +190,7 @@
         "logs:CreateLogStream",
         "logs:DeleteLogStream",
         "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
         "logs:Describe*"
       ],
       "Resource": "arn:aws:logs:*:*:log-group:/ecs/comfyui*"
