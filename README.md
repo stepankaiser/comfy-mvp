@@ -334,3 +334,4 @@ curl http://localhost:8190/api/download-dir?path=output/folder
 - **📦 Celé složky**: Klikněte na 📦 tlačítko u složky (stáhne jako ZIP)
 - **🔒 Bezpečnost**: Validace cest, přístup pouze k povoleným adresářům
 - **🎯 Kompatibilita**: Funguje v admin i user kontejnerech # Trigger deployment
+# Fix secrets
