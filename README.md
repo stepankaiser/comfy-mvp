@@ -336,3 +336,4 @@ curl http://localhost:8190/api/download-dir?path=output/folder
 - **🎯 Kompatibilita**: Funguje v admin i user kontejnerech # Trigger deployment
 # Fix secrets
 # Retry deployment with fixed secrets
+# Retry with updated IAM permissions
