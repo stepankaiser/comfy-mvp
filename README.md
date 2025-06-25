@@ -335,3 +335,4 @@ curl http://localhost:8190/api/download-dir?path=output/folder
 - **🔒 Bezpečnost**: Validace cest, přístup pouze k povoleným adresářům
 - **🎯 Kompatibilita**: Funguje v admin i user kontejnerech # Trigger deployment
 # Fix secrets
+# Retry deployment with fixed secrets
