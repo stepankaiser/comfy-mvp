@@ -1,0 +1,111 @@
+# Multi-stage Dockerfile for AWS ComfyUI Golden Image
+# Optimized for Fargate deployment with intelligent S3 caching
+
+# Stage 1: Base builder
+FROM python:3.11-slim as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    unzip \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install rclone for S3 operations
+RUN curl -O https://downloads.rclone.org/rclone-current-linux-amd64.zip \
+    && unzip rclone-current-linux-amd64.zip \
+    && cd rclone-*-linux-amd64 \
+    && cp rclone /usr/local/bin/ \
+    && chmod +x /usr/local/bin/rclone \
+    && cd .. \
+    && rm -rf rclone-*
+
+# Clone ComfyUI
+WORKDIR /tmp/build
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir "numpy<2.0" "scipy<1.13"
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime image
+FROM python:3.11-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    netcat-openbsd \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy rclone from builder
+COPY --from=builder /usr/local/bin/rclone /usr/local/bin/rclone
+
+# Copy Python packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+# Set working directory
+WORKDIR /app
+
+# Copy ComfyUI from builder
+COPY --from=builder /tmp/build /app
+
+# Install ComfyUI Manager
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git ./custom_nodes/ComfyUI-Manager
+
+# Copy Data Manager custom node
+COPY custom_nodes/ComfyUI-DataManager ./custom_nodes/ComfyUI-DataManager
+
+# Install Data Manager dependencies
+RUN pip install --no-cache-dir -r ./custom_nodes/ComfyUI-DataManager/requirements.txt
+
+# Install additional dependencies for AWS optimization
+RUN pip install --no-cache-dir \
+    boto3 \
+    aioboto3 \
+    aiofiles \
+    psutil \
+    redis
+
+# Create cache and working directories
+RUN mkdir -p \
+    /tmp/model_cache \
+    /tmp/hot_cache \
+    /app/shared_python \
+    /app/shared_libs \
+    /app/cache \
+    /app/user
+
+# Copy optimized entrypoint script
+COPY aws-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Copy cache management scripts
+COPY scripts/cache_manager.py /app/scripts/cache_manager.py
+COPY scripts/s3_optimizer.py /app/scripts/s3_optimizer.py
+
+# Set proper permissions
+RUN chmod +x /app/scripts/*.py
+
+# Create non-root user for security
+RUN useradd -m -u 1000 comfyui && \
+    chown -R comfyui:comfyui /app /tmp/model_cache /tmp/hot_cache
+
+# Switch to non-root user
+USER comfyui
+
+# Expose ComfyUI port
+EXPOSE 8190
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8190/ || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"] 

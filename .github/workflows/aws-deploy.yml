@@ -1,0 +1,320 @@
+name: AWS ECS Deployment
+
+on:
+  push:
+    branches:
+      - feature/aws-deployment
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: comfyui-golden-image-prod-app
+  ECS_CLUSTER: comfyui-golden-image-prod-cluster
+  ECS_SERVICE_ADMIN: comfyui-golden-image-prod-admin-service
+  ECS_SERVICE_USER: comfyui-golden-image-prod-user-service
+
+jobs:
+  # Terraform Infrastructure Management
+  terraform:
+    name: Terraform Plan/Apply
+    runs-on: ubuntu-latest
+    outputs:
+      ecr_repository_url: ${{ steps.terraform.outputs.ecr_repository_url }}
+      
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+        terraform_wrapper: false
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: |
+        terraform init \
+          -backend-config="bucket=${{ secrets.TERRAFORM_STATE_BUCKET }}" \
+          -backend-config="key=comfyui-golden-image/terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_REGION }}"
+
+    - name: Terraform Validate
+      working-directory: ./terraform
+      run: terraform validate
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: |
+        terraform plan \
+          -var="aws_region=${{ env.AWS_REGION }}" \
+          -var="environment=prod" \
+          -out=tfplan
+
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      working-directory: ./terraform
+      run: terraform apply -auto-approve tfplan
+
+    - name: Get Terraform Outputs
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      id: terraform
+      working-directory: ./terraform
+      run: |
+        echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)" >> $GITHUB_OUTPUT
+        echo "s3_bucket_name=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+        echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+
+  # Docker Build and Push
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ needs.terraform.outputs.ecr_repository_url }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./aws-Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Image scan
+      run: |
+        aws ecr start-image-scan \
+          --repository-name ${{ env.ECR_REPOSITORY }} \
+          --image-id imageTag=latest \
+          --region ${{ env.AWS_REGION }}
+
+  # ECS Deployment
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: [terraform, build-and-push]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update ECS Admin Service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE_ADMIN }} \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Update ECS User Service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE_USER }} \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Wait for Admin Service Deployment
+      run: |
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE_ADMIN }} \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Wait for User Service Deployment
+      run: |
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE_USER }} \
+          --region ${{ env.AWS_REGION }}
+
+  # Health Check and Smoke Tests
+  health-check:
+    name: Health Check and Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [terraform, deploy]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Get ALB DNS Name
+      id: get-alb
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names comfyui-golden-image-prod-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text \
+          --region ${{ env.AWS_REGION }})
+        echo "alb_dns=$ALB_DNS" >> $GITHUB_OUTPUT
+
+    - name: Wait for Load Balancer
+      run: |
+        echo "Waiting for load balancer to be ready..."
+        sleep 60
+
+    - name: Health Check - Admin Service
+      run: |
+        echo "Testing admin service health..."
+        for i in {1..10}; do
+          if curl -f -s "http://${{ steps.get-alb.outputs.alb_dns }}/admin/" > /dev/null; then
+            echo "Admin service is healthy"
+            break
+          fi
+          echo "Attempt $i failed, retrying in 30s..."
+          sleep 30
+        done
+
+    - name: Health Check - User Service
+      run: |
+        echo "Testing user service health..."
+        for i in {1..10}; do
+          if curl -f -s "http://${{ steps.get-alb.outputs.alb_dns }}/user/" > /dev/null; then
+            echo "User service is healthy"
+            break
+          fi
+          echo "Attempt $i failed, retrying in 30s..."
+          sleep 30
+        done
+
+    - name: Smoke Test - ComfyUI Interface
+      run: |
+        echo "Testing ComfyUI interface..."
+        
+        # Test admin interface
+        ADMIN_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ steps.get-alb.outputs.alb_dns }}/admin/")
+        if [ "$ADMIN_RESPONSE" = "200" ]; then
+          echo "✅ Admin interface accessible"
+        else
+          echo "❌ Admin interface failed (HTTP $ADMIN_RESPONSE)"
+          exit 1
+        fi
+        
+        # Test user interface
+        USER_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ steps.get-alb.outputs.alb_dns }}/user/")
+        if [ "$USER_RESPONSE" = "200" ]; then
+          echo "✅ User interface accessible"
+        else
+          echo "❌ User interface failed (HTTP $USER_RESPONSE)"
+          exit 1
+        fi
+
+    - name: Performance Test
+      run: |
+        echo "Running basic performance test..."
+        
+        # Test response time
+        RESPONSE_TIME=$(curl -o /dev/null -s -w "%{time_total}" "http://${{ steps.get-alb.outputs.alb_dns }}/admin/")
+        echo "Admin response time: ${RESPONSE_TIME}s"
+        
+        if (( $(echo "$RESPONSE_TIME < 5.0" | bc -l) )); then
+          echo "✅ Response time acceptable"
+        else
+          echo "⚠️ Response time high: ${RESPONSE_TIME}s"
+        fi
+
+  # Notification
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [terraform, build-and-push, deploy, health-check]
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Deployment Success Notification
+      if: needs.health-check.result == 'success'
+      run: |
+        echo "🎉 Deployment successful!"
+        echo "Admin URL: http://${{ needs.terraform.outputs.alb_dns_name }}/admin/"
+        echo "User URL: http://${{ needs.terraform.outputs.alb_dns_name }}/user/"
+
+    - name: Deployment Failure Notification
+      if: needs.health-check.result == 'failure' || needs.deploy.result == 'failure' || needs.build-and-push.result == 'failure'
+      run: |
+        echo "❌ Deployment failed!"
+        echo "Check the logs for details."
+        exit 1
+
+# Cleanup job for feature branches
+  cleanup:
+    name: Cleanup Feature Branch Resources
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Cleanup ECR Images
+      run: |
+        # Delete feature branch images
+        BRANCH_NAME=$(echo ${{ github.head_ref }} | sed 's/[^a-zA-Z0-9]/-/g')
+        aws ecr batch-delete-image \
+          --repository-name ${{ env.ECR_REPOSITORY }} \
+          --image-ids imageTag=$BRANCH_NAME \
+          --region ${{ env.AWS_REGION }} || true 
