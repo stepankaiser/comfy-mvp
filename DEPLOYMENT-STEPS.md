@@ -4,19 +4,23 @@ Complete step-by-step guide to deploy ComfyUI with GPU support to AWS.
 
 ## 📋 Prerequisites
 
-- ✅ AWS Account with admin privileges
+- ✅ AWS Account with **specific permissions** (see [AWS-IAM-SETUP.md](AWS-IAM-SETUP.md))
 - ✅ AWS CLI installed and configured
 - ✅ Terraform installed (v1.0+)
 - ✅ Docker installed (for local testing)
 - ✅ Git repository access
 
+> **💡 Tip:** You don't need full admin privileges! See [AWS-IAM-SETUP.md](AWS-IAM-SETUP.md) for minimal required permissions.
+
 ## 🔧 Step 1: AWS Credentials Setup
+
+> **🔐 Important:** First set up IAM permissions! See [AWS-IAM-SETUP.md](AWS-IAM-SETUP.md) for detailed guide.
 
 ### Option A: AWS CLI Configuration
 ```bash
 aws configure
-# Enter your AWS Access Key ID
-# Enter your AWS Secret Access Key
+# Enter your AWS Access Key ID (from IAM User)
+# Enter your AWS Secret Access Key (from IAM User)
 # Default region: eu-central-1
 # Default output format: json
 ```
@@ -31,6 +35,7 @@ export AWS_DEFAULT_REGION="eu-central-1"
 ### Verify AWS Access
 ```bash
 aws sts get-caller-identity
+# Should return your User ARN, not root account
 ```
 
 ## 🗄️ Step 2: Setup Terraform Backend
