@@ -9,6 +9,14 @@ terraform {
       version = "~> 5.0"
     }
   }
+  
+  backend "s3" {
+    # Backend configuration will be provided via -backend-config flags
+    # bucket = "terraform-state-bucket"
+    # key    = "comfyui-golden-image/terraform.tfstate"
+    # region = "eu-central-1"
+    # encrypt = true
+  }
 }
 
 provider "aws" {
@@ -272,8 +280,6 @@ resource "aws_ecs_cluster" "main" {
 
   tags = local.tags
 }
-
-
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "ecs" {

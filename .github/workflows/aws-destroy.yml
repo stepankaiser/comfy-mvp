@@ -1,0 +1,139 @@
+name: AWS Infrastructure Destroy
+
+on:
+  workflow_dispatch:  # Manual trigger only
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm infrastructure destruction'
+        required: true
+        default: ''
+      environment:
+        description: 'Environment to destroy (test/dev/prod)'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+        - test
+        - dev
+        - prod
+
+env:
+  AWS_REGION: eu-central-1
+
+jobs:
+  destroy:
+    name: Destroy AWS Infrastructure
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_destroy == 'DESTROY'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+        terraform_wrapper: false
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: |
+        terraform init \
+          -backend-config="bucket=${{ secrets.TERRAFORM_STATE_BUCKET }}" \
+          -backend-config="key=comfyui-golden-image/terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_REGION }}"
+
+    - name: Terraform Plan Destroy
+      working-directory: ./terraform
+      run: |
+        terraform plan -destroy \
+          -var="aws_region=${{ env.AWS_REGION }}" \
+          -var="environment=${{ github.event.inputs.environment }}" \
+          -out=destroy.tfplan
+
+    - name: Terraform Destroy
+      working-directory: ./terraform
+      run: terraform apply -auto-approve destroy.tfplan
+
+    - name: Manual Cleanup - Orphaned Resources
+      run: |
+        echo "Cleaning up any orphaned resources..."
+        
+        # Clean up IAM roles
+        for role in comfyui-golden-image-${{ github.event.inputs.environment }}-ecs-task-execution-role \
+                   comfyui-golden-image-${{ github.event.inputs.environment }}-ecs-task-role \
+                   comfyui-golden-image-${{ github.event.inputs.environment }}-ecs-instance-role \
+                   comfyui-golden-image-${{ github.event.inputs.environment }}-user-manager-task-role; do
+          echo "Attempting to delete role: $role"
+          
+          # Detach managed policies
+          aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null | while read policy_arn; do
+            if [ ! -z "$policy_arn" ]; then
+              aws iam detach-role-policy --role-name "$role" --policy-arn "$policy_arn" 2>/dev/null
+            fi
+          done
+          
+          # Delete inline policies
+          aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null | while read policy_name; do
+            if [ ! -z "$policy_name" ]; then
+              aws iam delete-role-policy --role-name "$role" --policy-name "$policy_name" 2>/dev/null
+            fi
+          done
+          
+          # Remove from instance profiles
+          aws iam list-instance-profiles-for-role --role-name "$role" --query 'InstanceProfiles[].InstanceProfileName' --output text 2>/dev/null | while read profile_name; do
+            if [ ! -z "$profile_name" ]; then
+              aws iam remove-role-from-instance-profile --instance-profile-name "$profile_name" --role-name "$role" 2>/dev/null
+              aws iam delete-instance-profile --instance-profile-name "$profile_name" 2>/dev/null
+            fi
+          done
+          
+          # Delete role
+          aws iam delete-role --role-name "$role" 2>/dev/null
+        done
+        
+        # Clean up ECR repositories
+        for repo in comfyui-golden-image-${{ github.event.inputs.environment }}-app \
+                   comfyui-golden-image-${{ github.event.inputs.environment }}-user-manager; do
+          echo "Attempting to delete ECR repo: $repo"
+          aws ecr delete-repository --repository-name "$repo" --force 2>/dev/null
+        done
+        
+        # Clean up CloudWatch log groups
+        aws logs delete-log-group --log-group-name "/ecs/comfyui-golden-image-${{ github.event.inputs.environment }}" 2>/dev/null
+        
+        # Clean up unassociated EIPs
+        aws ec2 describe-addresses --query 'Addresses[?AssociationId==null].AllocationId' --output text | while read allocation_id; do
+          if [ ! -z "$allocation_id" ]; then
+            aws ec2 release-address --allocation-id "$allocation_id" 2>/dev/null
+            echo "Released EIP: $allocation_id"
+          fi
+        done
+        
+        echo "Manual cleanup completed"
+
+    - name: Verify Cleanup
+      run: |
+        echo "Verifying cleanup..."
+        
+        # Check VPC count
+        vpc_count=$(aws ec2 describe-vpcs --query 'length(Vpcs[])' --output text)
+        echo "Current VPC count: $vpc_count/5"
+        
+        # Check EIP count
+        eip_count=$(aws ec2 describe-addresses --query 'length(Addresses[])' --output text)
+        echo "Current EIP count: $eip_count/5"
+        
+        # Check ECR repos
+        echo "Remaining ECR repositories:"
+        aws ecr describe-repositories --query 'repositories[].repositoryName' --output text 2>/dev/null || echo "None"
+        
+        echo "✅ Cleanup verification completed" 
