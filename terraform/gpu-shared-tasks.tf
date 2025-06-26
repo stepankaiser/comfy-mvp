@@ -12,9 +12,8 @@ resource "aws_ecs_task_definition" "user_shared_gpu" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn           = aws_iam_role.ecs_task.arn
 
-  ephemeral_storage {
-    size_in_gib = var.ephemeral_storage / var.containers_per_gpu
-  }
+  # ephemeral_storage not supported for EC2 launch type
+  # Storage is managed by the EC2 instance
 
   container_definitions = jsonencode([
     {
@@ -23,11 +22,11 @@ resource "aws_ecs_task_definition" "user_shared_gpu" {
       
       essential = true
       
-      # GPU resource requirements with memory limit for sharing
+      # GPU resource requirements - simplified for sharing
       resourceRequirements = [
         {
           type  = "GPU"
-          value = var.gpu_memory_reservation_mb > 0 ? "${var.gpu_memory_reservation_mb}" : "1"
+          value = "1"
         }
       ]
       
@@ -61,7 +60,7 @@ resource "aws_ecs_task_definition" "user_shared_gpu" {
         },
         {
           name  = "CACHE_SIZE_GB"
-          value = tostring((var.ephemeral_storage / var.containers_per_gpu) * 0.8)
+          value = tostring((var.gpu_instance_storage_gb / var.containers_per_gpu) * 0.8)
         },
         {
           name  = "PYTHONPATH"
@@ -149,9 +148,8 @@ resource "aws_ecs_task_definition" "user_dedicated_gpu" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn           = aws_iam_role.ecs_task.arn
 
-  ephemeral_storage {
-    size_in_gib = var.ephemeral_storage
-  }
+  # ephemeral_storage not supported for EC2 launch type
+  # Storage is managed by the EC2 instance
 
   container_definitions = jsonencode([
     {
@@ -198,7 +196,7 @@ resource "aws_ecs_task_definition" "user_dedicated_gpu" {
         },
         {
           name  = "CACHE_SIZE_GB"
-          value = tostring(var.ephemeral_storage * 0.8)
+          value = tostring(var.gpu_instance_storage_gb * 0.8)
         },
         {
           name  = "PYTHONPATH"

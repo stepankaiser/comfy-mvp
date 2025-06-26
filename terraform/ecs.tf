@@ -105,10 +105,6 @@ resource "aws_ecs_task_definition" "admin" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn           = aws_iam_role.ecs_task.arn
 
-  ephemeral_storage {
-    size_in_gib = var.ephemeral_storage
-  }
-
   container_definitions = jsonencode([
     {
       name  = "comfyui-admin"
@@ -154,7 +150,7 @@ resource "aws_ecs_task_definition" "admin" {
         },
         {
           name  = "CACHE_SIZE_GB"
-          value = tostring(var.ephemeral_storage * 0.8) # Use 80% for cache
+          value = tostring(var.gpu_instance_storage_gb * 0.8) # Use 80% of instance storage for cache
         },
         {
           name  = "PYTHONPATH"
@@ -214,9 +210,8 @@ resource "aws_ecs_task_definition" "user" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn           = aws_iam_role.ecs_task.arn
 
-  ephemeral_storage {
-    size_in_gib = var.ephemeral_storage
-  }
+  # ephemeral_storage not supported for EC2 launch type
+  # Storage is managed by the EC2 instance
 
   container_definitions = jsonencode([
     {
@@ -263,7 +258,7 @@ resource "aws_ecs_task_definition" "user" {
         },
         {
           name  = "CACHE_SIZE_GB"
-          value = tostring(var.ephemeral_storage * 0.8) # Use 80% for cache
+          value = tostring(var.gpu_instance_storage_gb * 0.8) # Use 80% of instance storage for cache
         },
         {
           name  = "PYTHONPATH"
