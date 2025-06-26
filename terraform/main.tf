@@ -47,7 +47,7 @@ locals {
 
 # VPC Configuration
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -70,13 +70,13 @@ resource "aws_subnet" "public" {
   count = 2
 
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.${count.index + 1}.0/24"
+  cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
-    Type = "public"
+    Type = "Public"
   })
 }
 
@@ -85,39 +85,40 @@ resource "aws_subnet" "private" {
   count = 2
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 10}.0/24"
+  cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
-    Type = "private"
+    Type = "Private"
   })
 }
 
+# Temporarily disable NAT Gateways to avoid EIP limit
 # NAT Gateways
-resource "aws_eip" "nat" {
-  count = 2
-
-  domain = "vpc"
-  depends_on = [aws_internet_gateway.main]
-
-  tags = merge(local.tags, {
-    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
-  })
-}
-
-resource "aws_nat_gateway" "main" {
-  count = 2
-
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-
-  tags = merge(local.tags, {
-    Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
-  })
-
-  depends_on = [aws_internet_gateway.main]
-}
+# resource "aws_eip" "nat" {
+#   count = 2
+# 
+#   domain = "vpc"
+#   depends_on = [aws_internet_gateway.main]
+# 
+#   tags = merge(local.tags, {
+#     Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+#   })
+# }
+# 
+# resource "aws_nat_gateway" "main" {
+#   count = 2
+# 
+#   allocation_id = aws_eip.nat[count.index].id
+#   subnet_id     = aws_subnet.public[count.index].id
+# 
+#   tags = merge(local.tags, {
+#     Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
+#   })
+# 
+#   depends_on = [aws_internet_gateway.main]
+# }
 
 # Route Tables
 resource "aws_route_table" "public" {
@@ -133,15 +134,17 @@ resource "aws_route_table" "public" {
   })
 }
 
+# Simplified private route tables without NAT gateways
 resource "aws_route_table" "private" {
   count = 2
 
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
+  # No NAT gateway route for now - ECS tasks will use public subnets
+  # route {
+  #   cidr_block     = "0.0.0.0/0"
+  #   nat_gateway_id = aws_nat_gateway.main[count.index].id
+  # }
 
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-private-rt-${count.index + 1}"

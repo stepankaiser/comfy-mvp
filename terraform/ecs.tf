@@ -326,9 +326,9 @@ resource "aws_ecs_service" "admin" {
   }
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
@@ -359,9 +359,9 @@ resource "aws_ecs_service" "user" {
   }
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
@@ -416,7 +416,7 @@ resource "aws_launch_template" "gpu_ecs" {
 
 resource "aws_autoscaling_group" "gpu_ecs" {
   name                = "${local.name_prefix}-gpu-ecs-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
+  vpc_zone_identifier = aws_subnet.public[*].id
   min_size            = var.gpu_asg_min_size
   max_size            = var.gpu_asg_max_size
   desired_capacity    = var.gpu_asg_desired_capacity
