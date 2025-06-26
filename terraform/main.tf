@@ -35,11 +35,13 @@ data "aws_caller_identity" "current" {}
 # Local values
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
+  workspace   = terraform.workspace
   
   tags = {
     Project     = var.project_name
     Environment = var.environment
     ManagedBy   = "terraform"
+    Workspace   = local.workspace
   }
 }
 
