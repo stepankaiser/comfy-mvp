@@ -1,0 +1,116 @@
+# Multi-stage Dockerfile for AWS ComfyUI Golden Image - Local Development Version
+# Uses Ubuntu base image instead of NVIDIA CUDA for local compatibility
+
+# Stage 1: Base builder
+FROM ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    curl \
+    unzip \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python as default
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# Install rclone for S3 operations
+RUN curl -O https://downloads.rclone.org/rclone-current-linux-amd64.zip \
+    && unzip rclone-current-linux-amd64.zip \
+    && cd rclone-*-linux-amd64 \
+    && cp rclone /usr/local/bin/ \
+    && chmod +x /usr/local/bin/rclone \
+    && cd .. \
+    && rm -rf rclone-*
+
+# Clone ComfyUI
+WORKDIR /tmp/build
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git .
+
+# Install Python dependencies (CPU version for local testing)
+RUN python3 -m pip install --upgrade pip
+RUN python3 -m pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN python3 -m pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime image
+FROM ubuntu:22.04
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    git \
+    curl \
+    netcat-openbsd \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python as default
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# Copy rclone from builder
+COPY --from=builder /usr/local/bin/rclone /usr/local/bin/rclone
+
+# Copy Python packages
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
+
+# Set working directory
+WORKDIR /app
+
+# Copy ComfyUI from builder
+COPY --from=builder /tmp/build /app
+
+# Install ComfyUI Manager
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git ./custom_nodes/ComfyUI-Manager
+
+# Create custom nodes directory
+RUN mkdir -p ./custom_nodes/ComfyUI-DataManager
+
+# Install additional dependencies for AWS optimization (with specific versions to avoid conflicts)
+RUN python3 -m pip install --no-cache-dir \
+    "boto3>=1.26.0" \
+    "botocore>=1.29.0" \
+    "aiofiles>=22.0.0" \
+    "psutil>=5.9.0"
+
+# Create cache and working directories
+RUN mkdir -p \
+    /tmp/model_cache \
+    /tmp/hot_cache \
+    /app/shared_python \
+    /app/shared_libs \
+    /app/cache \
+    /app/user
+
+# Copy optimized entrypoint script
+COPY aws-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Create scripts directory
+RUN mkdir -p /app/scripts
+
+# Create non-root user for security
+RUN useradd -m -u 1000 comfyui && \
+    chown -R comfyui:comfyui /app /tmp/model_cache /tmp/hot_cache
+
+# Switch to non-root user
+USER comfyui
+
+# Expose ComfyUI port
+EXPOSE 8190
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8190/ || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"] 
