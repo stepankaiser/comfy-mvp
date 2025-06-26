@@ -13,11 +13,11 @@ on:
 env:
   AWS_REGION: eu-central-1
   PROJECT_NAME: comfyui-golden-image
-  ENVIRONMENT: dev2
-  ECR_REPOSITORY: comfyui-golden-image-dev2-app
-  ECS_CLUSTER: comfyui-golden-image-dev2-cluster
-  ECS_SERVICE_ADMIN: comfyui-golden-image-dev2-admin-service
-  ECS_SERVICE_USER: comfyui-golden-image-dev2-user-service
+  ENVIRONMENT: test
+  ECR_REPOSITORY: comfyui-golden-image-test-app
+  ECS_CLUSTER: comfyui-golden-image-test-cluster
+  ECS_SERVICE_ADMIN: comfyui-golden-image-test-admin-service
+  ECS_SERVICE_USER: comfyui-golden-image-test-user-service
 
 jobs:
   # Terraform Infrastructure Management
