@@ -76,10 +76,6 @@ resource "aws_ecs_task_definition" "user_shared_gpu" {
           value = "1"
         },
         {
-          name  = "NVIDIA_VISIBLE_DEVICES"
-          value = "all"
-        },
-        {
           name  = "NVIDIA_DRIVER_CAPABILITIES"
           value = "compute,utility"
         },
@@ -215,10 +211,6 @@ resource "aws_ecs_task_definition" "user_dedicated_gpu" {
         {
           name  = "COMFYUI_DISABLE_MANAGER_INSTALL"
           value = "1"
-        },
-        {
-          name  = "NVIDIA_VISIBLE_DEVICES"
-          value = "all"
         },
         {
           name  = "NVIDIA_DRIVER_CAPABILITIES"

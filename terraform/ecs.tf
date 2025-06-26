@@ -165,10 +165,6 @@ resource "aws_ecs_task_definition" "admin" {
           value = "/app/shared_libs"
         },
         {
-          name  = "NVIDIA_VISIBLE_DEVICES"
-          value = "all"
-        },
-        {
           name  = "NVIDIA_DRIVER_CAPABILITIES"
           value = "compute,utility"
         }
@@ -280,10 +276,6 @@ resource "aws_ecs_task_definition" "user" {
         {
           name  = "COMFYUI_DISABLE_MANAGER_INSTALL"
           value = "1"
-        },
-        {
-          name  = "NVIDIA_VISIBLE_DEVICES"
-          value = "all"
         },
         {
           name  = "NVIDIA_DRIVER_CAPABILITIES"
