@@ -4,7 +4,7 @@
 # Basic Configuration
 aws_region   = "eu-central-1"
 project_name = "comfyui-golden-image"
-environment  = "dev"  # Start with dev, change to prod later
+environment  = "test"  # Using test environment to avoid conflicts
 
 # Container Resources (optimized for GPU sharing)
 container_cpu    = 4096   # 4 vCPU per container

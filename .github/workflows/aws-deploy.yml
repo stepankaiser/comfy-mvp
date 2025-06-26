@@ -12,10 +12,12 @@ on:
 
 env:
   AWS_REGION: eu-central-1
-  ECR_REPOSITORY: comfyui-golden-image-prod-app
-  ECS_CLUSTER: comfyui-golden-image-prod-cluster
-  ECS_SERVICE_ADMIN: comfyui-golden-image-prod-admin-service
-  ECS_SERVICE_USER: comfyui-golden-image-prod-user-service
+  PROJECT_NAME: comfyui-golden-image
+  ENVIRONMENT: test
+  ECR_REPOSITORY: comfyui-golden-image-test-app
+  ECS_CLUSTER: comfyui-golden-image-test-cluster
+  ECS_SERVICE_ADMIN: comfyui-golden-image-test-admin-service
+  ECS_SERVICE_USER: comfyui-golden-image-test-user-service
 
 jobs:
   # Terraform Infrastructure Management
@@ -59,7 +61,7 @@ jobs:
       run: |
         terraform plan \
           -var="aws_region=${{ env.AWS_REGION }}" \
-          -var="environment=prod" \
+          -var="environment=${{ env.ENVIRONMENT }}" \
           -out=tfplan
 
     - name: Terraform Apply
@@ -124,6 +126,11 @@ jobs:
         cache-to: type=gha,mode=max
         platforms: linux/amd64
 
+    - name: Get User Manager ECR Repository
+      id: get-user-manager-repo
+      run: |
+        echo "user_manager_repo_url=${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager" >> $GITHUB_OUTPUT
+
     - name: Build and push User Manager Docker image
       uses: docker/build-push-action@v5
       with:
@@ -131,8 +138,8 @@ jobs:
         file: ./user-manager/Dockerfile
         push: true
         tags: |
-          ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager:${{ github.sha }}
-          ${{ env.ECR_REGISTRY }}/${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-user-manager:latest
+          ${{ steps.get-user-manager-repo.outputs.user_manager_repo_url }}:${{ github.sha }}
+          ${{ steps.get-user-manager-repo.outputs.user_manager_repo_url }}:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64
@@ -229,7 +236,7 @@ jobs:
       id: get-alb
       run: |
         ALB_DNS=$(aws elbv2 describe-load-balancers \
-          --names comfyui-golden-image-prod-alb \
+          --names ${{ env.PROJECT_NAME }}-${{ env.ENVIRONMENT }}-alb \
           --query 'LoadBalancers[0].DNSName' \
           --output text \
           --region ${{ env.AWS_REGION }})
