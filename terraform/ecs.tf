@@ -318,7 +318,6 @@ resource "aws_ecs_service" "admin" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.admin.arn
   desired_count   = var.admin_service_desired_count
-  launch_type     = "EC2"  # Changed from FARGATE to EC2 for GPU support
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.gpu.name
@@ -326,9 +325,9 @@ resource "aws_ecs_service" "admin" {
   }
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   load_balancer {
@@ -351,7 +350,6 @@ resource "aws_ecs_service" "user" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.user.arn
   desired_count   = var.user_service_desired_count
-  launch_type     = "EC2"  # Changed from FARGATE to EC2 for GPU support
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.gpu.name
@@ -359,9 +357,9 @@ resource "aws_ecs_service" "user" {
   }
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   load_balancer {
@@ -416,7 +414,7 @@ resource "aws_launch_template" "gpu_ecs" {
 
 resource "aws_autoscaling_group" "gpu_ecs" {
   name                = "${local.name_prefix}-gpu-ecs-asg"
-  vpc_zone_identifier = aws_subnet.public[*].id
+  vpc_zone_identifier = aws_subnet.private[*].id
   min_size            = var.gpu_asg_min_size
   max_size            = var.gpu_asg_max_size
   desired_capacity    = var.gpu_asg_desired_capacity

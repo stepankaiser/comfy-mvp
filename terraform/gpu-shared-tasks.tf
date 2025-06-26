@@ -255,7 +255,6 @@ resource "aws_ecs_service" "user_flexible" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = var.enable_gpu_sharing ? aws_ecs_task_definition.user_shared_gpu[0].arn : aws_ecs_task_definition.user_dedicated_gpu[0].arn
   desired_count   = var.user_service_desired_count * (var.enable_gpu_sharing ? var.containers_per_gpu : 1)
-  launch_type     = "EC2"
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.gpu.name

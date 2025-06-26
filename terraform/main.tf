@@ -120,6 +120,74 @@ resource "aws_subnet" "private" {
 #   depends_on = [aws_internet_gateway.main]
 # }
 
+# NAT Instances (alternative to NAT Gateways to avoid EIP limit)
+data "aws_ami" "nat_instance" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn-ami-vpc-nat-*"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+}
+
+resource "aws_instance" "nat" {
+  count                  = 2
+  ami                    = data.aws_ami.nat_instance.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public[count.index].id
+  vpc_security_group_ids = [aws_security_group.nat.id]
+  source_dest_check      = false
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-nat-instance-${count.index + 1}"
+  })
+}
+
+# Security group for NAT instances
+resource "aws_security_group" "nat" {
+  name        = "${local.name_prefix}-nat-instances"
+  description = "Security group for NAT instances"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-nat-instances"
+  })
+}
+
 # Route Tables
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -134,17 +202,16 @@ resource "aws_route_table" "public" {
   })
 }
 
-# Simplified private route tables without NAT gateways
+# Private route tables with NAT instances
 resource "aws_route_table" "private" {
   count = 2
 
   vpc_id = aws_vpc.main.id
 
-  # No NAT gateway route for now - ECS tasks will use public subnets
-  # route {
-  #   cidr_block     = "0.0.0.0/0"
-  #   nat_gateway_id = aws_nat_gateway.main[count.index].id
-  # }
+  route {
+    cidr_block           = "0.0.0.0/0"
+    network_interface_id = aws_instance.nat[count.index].primary_network_interface_id
+  }
 
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-private-rt-${count.index + 1}"
