@@ -1,51 +1,76 @@
 # ComfyUI Golden Image System
 
-Kompletní multi-user systém pro ComfyUI s centralizovaným správou modelů, custom nodes a závislostí.
+**Multi-user Docker infrastructure for ComfyUI with centralized model management and S3 persistence.**
 
-## 🎯 Funkce
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](Dockerfile)
 
-- **Admin Role**: Plný write přístup - instalace modelů, custom nodes, dependencies
-- **User Role**: Read-only přístup ke sdílenému prostředí
-- **Centralizované úložiště**: S3 jako single source of truth
-- **Sdílené prostředí**: Modely, custom nodes, Python balíčky
-- **Transparentní integrace**: ComfyUI funguje jako s lokálními soubory
+A production-ready system that uses the **golden image** pattern: an admin maintains a single, centralized ComfyUI environment (models, custom nodes, Python dependencies), while any number of users get instant read-only access to that environment through Docker volume mounts. AWS S3 serves as the durable storage backend, with rclone handling background synchronization.
 
-## 🏗️ Architektura
+---
+
+## Features
+
+- **Admin Role** -- Full write access to install models, custom nodes, and Python packages.
+- **User Role** -- Read-only access to the shared environment; users generate images without managing infrastructure.
+- **Centralized Storage** -- One set of models and nodes shared across all containers. No duplication.
+- **S3 Persistence** -- rclone syncs the golden image to S3 on a schedule, so nothing is lost when containers restart.
+- **Zero-Setup Users** -- New users get a fully configured ComfyUI instance immediately.
+- **Horizontal Scaling** -- Add more user containers with a few lines of Compose config.
+
+---
+
+## Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐
 │   Admin User    │    │  Regular User   │
 │                 │    │                 │
-│ ✅ Install      │    │ 👁️ Read-only    │
-│ ✅ Upload       │    │ 👁️ Use models   │
-│ ✅ Manage       │    │ 👁️ Generate     │
+│  Install        │    │  Read-only      │
+│  Upload         │    │  Use models     │
+│  Manage         │    │  Generate       │
 └─────────────────┘    └─────────────────┘
          │                       │
          ▼                       ▼
 ┌─────────────────────────────────────────┐
 │         Shared Golden Image             │
 │                                         │
-│ 📁 Models (checkpoints, loras, vae)     │
-│ 🔧 Custom Nodes                         │
-│ 🐍 Python Dependencies                  │
-│ 📚 System Libraries                     │
+│  Models (checkpoints, LoRAs, VAE)       │
+│  Custom Nodes                           │
+│  Python Dependencies                    │
+│  System Libraries                       │
 └─────────────────────────────────────────┘
                     │
                     ▼
           ┌─────────────────┐
-          │   S3 Storage    │
-          │ (Persistence)   │
+          │   AWS S3        │
+          │  (Persistence)  │
           └─────────────────┘
 ```
 
-## 🚀 Spuštění
+The admin container mounts shared Docker volumes with **read-write** access. User containers mount the same volumes as **read-only**. A background rclone process in the admin container syncs changes to S3 every 5 minutes, and pulls the latest state from S3 on startup.
 
-### 1. Nastavení prostředí
+---
 
-Vytvořte `.env` soubor:
+## Quick Start
+
+### 1. Clone the repository
 
 ```bash
-# AWS S3 Configuration
+git clone https://github.com/stepankaiser/comfy-mvp.git
+cd comfy-mvp
+```
+
+### 2. Configure environment
+
+```bash
+cp env.example .env
+```
+
+Edit `.env` and fill in your AWS credentials:
+
+```bash
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_REGION=eu-central-1
@@ -53,146 +78,93 @@ S3_BUCKET_NAME=your-comfyui-bucket
 S3_ENDPOINT=https://s3.eu-central-1.amazonaws.com
 ```
 
-### 2. Spuštění systému
+### 3. Start the system
 
 ```bash
-# Spustit celý systém
 docker-compose up -d
-
-# Sledovat logy
-docker-compose logs -f admin_comfyui
-docker-compose logs -f user_comfyui
 ```
 
-### 3. Přístup k rozhraní
+### 4. Access the interfaces
 
-- **Admin ComfyUI**: http://localhost:8190
-- **Admin Manager**: http://localhost:8190/manager (full access)
-- **User ComfyUI**: http://localhost:8191
-- **User Manager**: http://localhost:8191/manager (read-only)
+| Role  | ComfyUI              | Manager                           |
+|-------|----------------------|-----------------------------------|
+| Admin | http://localhost:8190 | http://localhost:8190/manager      |
+| User  | http://localhost:8191 | http://localhost:8191/manager (RO) |
 
-## 👑 Admin Workflow
+---
 
-### Instalace modelů
-1. Otevřete admin rozhraní (port 8190)
-2. Nahrajte modely přes ComfyUI interface
-3. Modely se automaticky uloží do shared volume
-4. Background sync je nahraje do S3 (každých 5 minut)
+## Admin Workflow
 
-### Instalace custom nodes
-1. Otevřete ComfyUI Manager: http://localhost:8190/manager
-2. Klikněte "Install Custom Nodes"
-3. Vyberte požadované nodes z katalogu
-4. Systém automaticky:
-   - Nainstaluje node do shared volume
-   - Nainstaluje Python dependencies
-   - Synchronizuje do S3
-5. Restart admin kontejneru pro aktivaci nových nodes
+1. Open the admin interface at port **8190**.
+2. **Install models** -- upload checkpoints, LoRAs, or VAE files through the ComfyUI interface. They are saved to the shared volume automatically.
+3. **Install custom nodes** -- use ComfyUI Manager at `/manager` to browse and install nodes from the catalog. Python dependencies are installed alongside them.
+4. **S3 sync** -- a background process uploads changes to S3 every 5 minutes. To trigger a manual sync:
+   ```bash
+   docker-compose exec admin_comfyui rclone sync /app/models s3-storage:$S3_BUCKET_NAME/models
+   ```
+5. **Restart** the admin container after major changes (new nodes that require a process restart):
+   ```bash
+   docker-compose restart admin_comfyui
+   ```
 
-### Správa prostředí
-```bash
-# Restart admin kontejneru (po větších změnách)
-docker-compose restart admin_comfyui
+---
 
-# Manuální sync do S3
-docker-compose exec admin_comfyui rclone sync /app/shared_models s3-storage:your-bucket/models
+## User Experience
+
+Users open port **8191** and see a fully functional ComfyUI instance:
+
+- All admin-installed models appear in the model dropdowns.
+- All custom nodes are available and functional.
+- The standard ComfyUI workflow editor works normally.
+- Generated images are saved to a per-user output directory.
+
+Install and delete buttons in ComfyUI Manager are disabled -- users cannot modify the shared environment.
+
+---
+
+## Volume Structure
+
 ```
-
-## 👤 User Experience
-
-### Co uživatel vidí
-- ✅ Všechny modely nainstalované adminem
-- ✅ Všechny custom nodes funkční
-- ✅ Plně funkční ComfyUI interface
-- ❌ Zakázané install tlačítka (read-only)
-
-### Workflow pro uživatele
-1. Otevřete user rozhraní (port 8191)
-2. Vyberte model z dropdown (všechny admin modely dostupné)
-3. Použijte custom nodes (všechny admin nodes funkční)
-4. Generujte obrázky normálně
-5. Obrázky se ukládají do uživatelského output adresáře
-
-## 🔧 Pokročilé funkce
-
-### Struktura shared volumes
-```
-shared_models/
-├── checkpoints/     # Hlavní modely
-├── loras/          # LoRA modely
-├── vae/            # VAE modely
-├── controlnet/     # ControlNet modely
-├── embeddings/     # Textual Inversion
-└── upscale_models/ # Upscale modely
+Shared (golden image)          Per-user
+─────────────────────          ────────────────
+shared_models/                 user_cache/
+  checkpoints/                 user_config/
+  loras/                       user_output/
+  vae/
+  controlnet/
+  embeddings/
+  upscale_models/
 
 shared_custom_nodes/
-├── ComfyUI-Manager/
-├── ComfyUI-Custom-Scripts/
-└── [další custom nodes]
+  ComfyUI-Manager/
+  ...
 
 shared_python/
-├── [Python balíčky z custom nodes]
-└── [site-packages]
+  (site-packages from nodes)
+
+shared_libs/
+  (system libraries)
 ```
 
-### S3 struktura
+On S3, the layout mirrors the shared volumes:
+
 ```
 s3://your-bucket/
 ├── models/
 │   ├── checkpoints/
 │   ├── loras/
-│   └── [další model typy]
+│   └── ...
 └── custom_nodes/
-    ├── ComfyUI-Manager/
-    └── [další nodes]
+    └── ...
 ```
 
-### Monitoring a debugging
-```bash
-# Sledovat sync aktivity
-docker-compose logs -f admin_comfyui | grep "sync"
+---
 
-# Zkontrolovat shared volumes
-docker-compose exec admin_comfyui ls -la /app/shared_models/checkpoints/
+## Scaling
 
-# Ověřit Python dependencies
-docker-compose exec admin_comfyui ls -la /app/shared_python/
-```
+To add another user, append a new service to `docker-compose.yml`:
 
-## 🛠️ Troubleshooting
-
-### Modely se nezobrazují
-```bash
-# Zkontrolovat model paths
-docker-compose exec admin_comfyui cat /app/extra_model_paths.yaml
-
-# Ověřit symlinky
-docker-compose exec admin_comfyui ls -la /app/models
-```
-
-### Custom nodes nefungují
-```bash
-# Zkontrolovat custom nodes
-docker-compose exec admin_comfyui ls -la /app/custom_nodes/
-
-# Zkontrolovat Python path
-docker-compose exec admin_comfyui echo $PYTHONPATH
-```
-
-### S3 sync problémy
-```bash
-# Test S3 připojení
-docker-compose exec admin_comfyui rclone ls s3-storage:your-bucket
-
-# Manuální sync
-docker-compose exec admin_comfyui rclone sync /app/shared_models s3-storage:your-bucket/models --dry-run
-```
-
-## 📈 Scaling
-
-### Přidání dalších uživatelů
 ```yaml
-# V docker-compose.yml
 user2_comfyui:
   build: .
   container_name: user2_comfyui
@@ -201,55 +173,31 @@ user2_comfyui:
   environment:
     - CONTAINER_ROLE=user
   volumes:
-    - shared_models:/app/shared_models:ro
-    - shared_custom_nodes:/app/shared_custom_nodes:ro
+    - shared_models:/app/models:ro
+    - shared_custom_nodes:/app/custom_nodes:ro
     - shared_python:/app/shared_python:ro
+    - shared_libs:/app/shared_libs:ro
     - user2_cache:/app/cache
     - user2_config:/app/user
     - user2_output:/app/output
 ```
 
-### Production deployment
-- Použijte externí S3 bucket s proper IAM policies
-- Nastavte resource limits pro kontejnery
-- Implementujte proper logging a monitoring
-- Zvažte použití Kubernetes pro scaling
+Remember to declare the new per-user volumes in the top-level `volumes:` block.
 
-## 🔐 Security
+For larger deployments, consider Kubernetes with a shared PersistentVolumeClaim and per-pod output volumes.
 
-### IAM Permissions (S3)
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:ListBucket",
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::your-bucket",
-        "arn:aws:s3:::your-bucket/*"
-      ]
-    }
-  ]
-}
-```
+---
 
-### Container Security
-- User kontejnery nemají privilegované přístupy
-- Read-only mount pro shared volumes
-- Izolované user-specific volumes
+## Security
 
-## 🎉 Výhody tohoto řešení
+- **IAM scoping** -- create a dedicated IAM user with permissions limited to the single S3 bucket used by this system.
+- **Read-only mounts** -- user containers cannot write to model or node volumes.
+- **Container isolation** -- each user has isolated cache, config, and output volumes.
+- **Manager lockdown** -- the `COMFYUI_DISABLE_MANAGER_INSTALL` flag prevents users from installing packages.
+- **No privileged access** -- only the admin container requires `SYS_ADMIN` / FUSE capabilities (for rclone mount); user containers do not.
 
-1. **Unified Golden Image**: Admin vytvoří kompletní prostředí jednou
-2. **Zero Setup Users**: Uživatelé mají okamžitě vše dostupné
-3. **Centralized Management**: Vše se spravuje z jednoho místa
-4. **Cost Effective**: Sdílené modely = úspora místa
-5. **Transparent**: ComfyUI funguje normálně pro všechny
-6. **Scalable**: Snadné přidávání dalších uživatelů
-7. **Persistent**: S3 jako backup pro celé prostředí 
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
